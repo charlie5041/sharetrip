@@ -1,1 +1,34 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tripshare-f6209","appId":"1:307482465264:android:ec5f444450ac8de73d0335","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"tripshare-f6209","appId":"1:307482465264:ios:2a529e9649d39bbb3d0335","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"tripshare-f6209","configurations":{"android":"1:307482465264:android:ec5f444450ac8de73d0335","ios":"1:307482465264:ios:2a529e9649d39bbb3d0335"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tripshare-f6209",
+          "appId": "1:307482465264:android:ec5f444450ac8de73d0335",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "tripshare-f6209",
+          "appId": "1:307482465264:ios:2a529e9649d39bbb3d0335",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tripshare-f6209",
+          "configurations": {
+            "android": "1:307482465264:android:ec5f444450ac8de73d0335",
+            "ios": "1:307482465264:ios:2a529e9649d39bbb3d0335"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
