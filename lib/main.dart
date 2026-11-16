@@ -11,14 +11,80 @@ import 'services/exchange_rates.dart';
 import 'services/trip_repository.dart';
 import 'theme.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  final auth = FirebaseAuth.instance;
-  final user = auth.currentUser ?? (await auth.signInAnonymously()).user!;
-  final repo =
-      TripRepository(firestore: FirebaseFirestore.instance, uid: user.uid);
-  runApp(TripShareApp(repo: repo, rates: ExchangeRates()));
+void main() {
+  // Show something at once: signing in can take a while on a slow first
+  // connection, and a blank screen reads as a crash.
+  runApp(const _Boot());
+}
+
+/// Starts Firebase and signs in anonymously, with a visible loading state
+/// and a retry when it fails or takes too long.
+class _Boot extends StatefulWidget {
+  const _Boot();
+
+  @override
+  State<_Boot> createState() => _BootState();
+}
+
+class _BootState extends State<_Boot> {
+  late Future<TripRepository> _ready = _start();
+
+  static const _timeout = Duration(seconds: 20);
+
+  static Future<TripRepository> _start() async {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform);
+    }
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser ??
+        (await auth.signInAnonymously().timeout(_timeout)).user!;
+    return TripRepository(firestore: FirebaseFirestore.instance, uid: user.uid);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<TripRepository>(
+      future: _ready,
+      builder: (context, snap) {
+        if (snap.hasData) {
+          return TripShareApp(repo: snap.data!, rates: ExchangeRates());
+        }
+        return MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: snap.hasError
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('連不上伺服器，請確認網路後再試一次',
+                              textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: () =>
+                                setState(() => _ready = _start()),
+                            child: const Text('重試'),
+                          ),
+                        ],
+                      )
+                    : const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('同遊啟動中…'),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// Everything the screens need, handed down once instead of through
