@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+
+    function trip(tripId) {
+      return get(/databases/$(database)/documents/trips/$(tripId)).data;
+    }
+    function isMember(tripId) {
+      return signedIn() && me() in trip(tripId).memberUids;
+    }
+
+    // users/{uid}: nickname, tripIds, joinCode. Each device owns its own.
+    match /users/{uid} {
+      allow read, write: if signedIn() && me() == uid;
+    }
+
+    // Invites are fetched by code (get, never list), so knowing the 8
+    // characters is what lets someone in.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow create: if isMember(request.resource.data.tripId)
+        && request.resource.data.keys().hasOnly(['tripId', 'expiresAt', 'createdBy'])
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.createdBy == me();
+    }
+
+    match /trips/{tripId} {
+      allow read: if signedIn() && me() in resource.data.memberUids;
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.memberUids == [me()];
+
+      // Members may edit the trip, but not take it from its owner or drop
+      // other members from memberUids.
+      allow update: if signedIn() && me() in resource.data.memberUids
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.memberUids.hasAll(resource.data.memberUids);
+
+      // Joining: a non-member adds exactly their own uid, backed by an
+      // unexpired invite for this trip whose code they wrote to their user
+      // document first — the rules have no other way to see which invite
+      // authorised the join without a Cloud Function.
+      allow update: if signedIn() && !(me() in resource.data.memberUids)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+        && request.resource.data.memberUids.toSet()
+             == resource.data.memberUids.toSet().union([me()].toSet())
+        && validJoin(tripId);
+
+      function validJoin(tripId) {
+        let code = get(/databases/$(database)/documents/users/$(me())).data.joinCode;
+        let invite = get(/databases/$(database)/documents/invites/$(code)).data;
+        return invite.tripId == tripId && invite.expiresAt > request.time;
+      }
+
+      // Everything inside a trip is open to its members. Someone joining
+      // writes their own member document in the same batch as the join,
+      // so that one checks the trip as it will be after the batch.
+      match /members/{memberId} {
+        allow read, write: if isMember(tripId);
+        allow create: if signedIn() && memberId == me()
+          && request.resource.data.uid == me()
+          && me() in getAfter(/databases/$(database)/documents/trips/$(tripId)).data.memberUids;
+      }
+      match /{sub}/{docId} {
+        allow read, write: if sub in ['expenses', 'settlements', 'items', 'checklist']
+          && isMember(tripId);
+      }
+    }
+  }
+}
