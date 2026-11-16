@@ -1,6 +1,9 @@
-# ShareTrip MVP 規格
+# 同遊（TripShare）MVP 規格
 
 給自己和朋友用的旅遊 app：一趟旅程裡，大家一起記帳、分帳、看行程。
+
+名稱：中文「同遊」、英文「TripShare」。兩個平台的手機桌面上都顯示「同遊」。repo 名稱維持 `sharetrip`，套件 ID 也維持 `com.charliechen.sharetrip`（使用者看不到）。
+
 期限 2026-11-30。凡是不在「MVP 範圍」裡的，都等 11/30 之後再說。
 
 ## MVP 範圍

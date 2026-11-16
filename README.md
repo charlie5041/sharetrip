@@ -1,4 +1,4 @@
-# ShareTrip
+# 同遊 TripShare
 
 給朋友一起用的旅遊 app：記帳、多幣別分帳、每日行程。Flutter（Android + iOS）+ Firebase。
 

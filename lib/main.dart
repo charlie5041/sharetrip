@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() {
-  runApp(const ShareTripApp());
+  runApp(const TripShareApp());
 }
 
-class ShareTripApp extends StatelessWidget {
-  const ShareTripApp({super.key});
+class TripShareApp extends StatelessWidget {
+  const TripShareApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ShareTrip',
+      title: '同遊',
       locale: const Locale('zh', 'TW'),
       supportedLocales: const [Locale('zh', 'TW')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
