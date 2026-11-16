@@ -19,3 +19,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    # Huninn (粉圓), SIL OFL 1.1 — see assets/fonts/OFL.txt. Bundled so
+    # the app looks right offline, abroad, on first launch.
+    - family: Huninn
+      fonts:
+        - asset: assets/fonts/Huninn-Regular.ttf

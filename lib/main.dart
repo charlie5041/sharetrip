@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'theme.dart';
+
 void main() {
   runApp(const TripShareApp());
 }
@@ -15,12 +17,7 @@ class TripShareApp extends StatelessWidget {
       locale: const Locale('zh', 'TW'),
       supportedLocales: const [Locale('zh', 'TW')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.teal,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      theme: buildAppTheme(),
       home: const HomeScreen(),
     );
   }
