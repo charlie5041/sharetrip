@@ -47,3 +47,11 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 node_modules/
+
+# Kotlin rewrite (kmp/)
+kmp/.gradle/
+kmp/.kotlin/
+kmp/build/
+kmp/composeApp/build/
+kmp/local.properties
+kmp/kotlin-js-store/
