@@ -63,6 +63,7 @@ private fun TypingCard() {
         BasicTextField(
             value = text,
             onValueChange = { text = it },
+            singleLine = true,
             textStyle = LocalTextStyle.current.copy(fontSize = 18.sp),
             cursorBrush = SolidColor(AppColors.ink),
             modifier = Modifier.fillMaxWidth()
