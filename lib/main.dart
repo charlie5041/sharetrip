@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
-import 'screens/nickname_screen.dart';
 import 'screens/trip_list_screen.dart';
 import 'services/account.dart';
 import 'services/exchange_rates.dart';
@@ -179,48 +178,9 @@ class TripShareApp extends StatelessWidget {
         supportedLocales: const [Locale('zh', 'TW')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: buildAppTheme(),
-        home: const _Start(),
+        // No sign-up step: the name is asked for when creating a trip.
+        home: const TripListScreen(),
       ),
-    );
-  }
-}
-
-/// Asks for a nickname on first launch, then shows the trips.
-class _Start extends StatefulWidget {
-  const _Start();
-
-  @override
-  State<_Start> createState() => _StartState();
-}
-
-class _StartState extends State<_Start> {
-  Future<String?>? _nickname;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _nickname ??= AppScope.of(context).repo.loadNickname();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _nickname,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
-        }
-        final name = snap.data;
-        if (name == null || name.isEmpty) {
-          return NicknameScreen(
-            onDone: (n) => setState(() {
-              _nickname = Future.value(n);
-            }),
-          );
-        }
-        return TripListScreen(nickname: name);
-      },
     );
   }
 }
