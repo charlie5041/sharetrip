@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="LinksTest[jvm]" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-17T17:40:12.021Z" hostname="vm" time="0.001">
-  <properties/>
-  <testcase name="prefersSavedLinkButOnlyHttp[jvm]" classname="tw.tripshare.core.LinksTest" time="0.0"/>
-  <testcase name="searchesByPlace[jvm]" classname="tw.tripshare.core.LinksTest" time="0.001"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

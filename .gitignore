@@ -52,6 +52,7 @@ node_modules/
 kmp/.gradle/
 kmp/.kotlin/
 kmp/build/
+kmp/core/build/
 kmp/composeApp/build/
 kmp/local.properties
 kmp/kotlin-js-store/
