@@ -8,6 +8,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
 import 'screens/nickname_screen.dart';
 import 'screens/trip_list_screen.dart';
+import 'services/account.dart';
 import 'services/exchange_rates.dart';
 import 'services/trip_repository.dart';
 import 'theme.dart';
@@ -59,7 +60,15 @@ class _BootState extends State<_Boot> {
       future: _ready,
       builder: (context, snap) {
         if (snap.hasData) {
-          return TripShareApp(repo: snap.data!, rates: ExchangeRates());
+          return TripShareApp(
+            // A new key per session, so nothing from the old identity's
+            // screens survives a switch.
+            key: ValueKey(snap.data!.uid),
+            repo: snap.data!,
+            rates: ExchangeRates(),
+            account: FirebaseAccount(FirebaseAuth.instance),
+            restart: () => setState(() => _ready = _start()),
+          );
         }
         return MaterialApp(
           theme: buildAppTheme(),
@@ -106,30 +115,50 @@ class AppScope extends InheritedWidget {
     required this.repo,
     required this.rates,
     required super.child,
+    this.account,
+    this.restart = _noop,
   });
 
   final TripRepository repo;
   final ExchangeRates rates;
+
+  /// Google backup of the identity; null in tests.
+  final Account? account;
+
+  /// Starts a new session after the signed-in user changed.
+  final VoidCallback restart;
+
+  static void _noop() {}
 
   static AppScope of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!;
 
   @override
   bool updateShouldNotify(AppScope old) =>
-      repo != old.repo || rates != old.rates;
+      repo != old.repo || rates != old.rates || account != old.account;
 }
 
 class TripShareApp extends StatelessWidget {
-  const TripShareApp({super.key, required this.repo, required this.rates});
+  const TripShareApp({
+    super.key,
+    required this.repo,
+    required this.rates,
+    this.account,
+    this.restart = AppScope._noop,
+  });
 
   final TripRepository repo;
   final ExchangeRates rates;
+  final Account? account;
+  final VoidCallback restart;
 
   @override
   Widget build(BuildContext context) {
     return AppScope(
       repo: repo,
       rates: rates,
+      account: account,
+      restart: restart,
       child: MaterialApp(
         title: '同遊',
         locale: const Locale('zh', 'TW'),
