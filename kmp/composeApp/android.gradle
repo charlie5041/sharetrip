@@ -1,35 +1,11 @@
 // Android-only settings, kept apart so the web app builds without Android's
-// Gradle plugin (see build.gradle.kts).
-android {
-    namespace 'tw.tripshare'
-    compileSdk 36
-
-    defaultConfig {
-        // A separate id for the prototype, so it installs beside the Flutter
-        // app instead of over it.
-        applicationId 'com.charliechen.sharetrip.kmp'
+// Gradle plugin (see build.gradle.kts). The shared code is an Android
+// library; the installable app is :androidApp.
+kotlin {
+    android {
+        namespace 'tw.tripshare.shared'
+        compileSdk 37
         minSdk 24
-        targetSdk 36
-        versionCode 1
-        versionName '0.0.1'
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Debug-signed so CI can build it without the release keystore.
-            signingConfig signingConfigs.debug
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    packaging {
-        resources.excludes += ['/META-INF/{AL2.0,LGPL2.1}', 'DebugProbesKt.bin']
+        androidResources { enable true }
     }
 }

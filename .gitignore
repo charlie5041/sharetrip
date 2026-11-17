@@ -55,3 +55,4 @@ kmp/build/
 kmp/composeApp/build/
 kmp/local.properties
 kmp/kotlin-js-store/
+kmp/androidApp/build/

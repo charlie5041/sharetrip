@@ -31,3 +31,5 @@ dependencyResolutionManagement {
 }
 
 include(":composeApp")
+// The Android app shell; skipped where the Android SDK isn't available.
+if (providers.gradleProperty("tripshare.android").orNull != "false") include(":androidApp")

@@ -7,7 +7,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        if (withAndroid) classpath("com.android.tools.build:gradle:8.13.0")
+        if (withAndroid) classpath("com.android.tools.build:gradle:9.3.1")
     }
 }
 

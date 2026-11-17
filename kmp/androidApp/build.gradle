@@ -1,0 +1,43 @@
+// The installable Android app: a thin shell around :composeApp.
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+
+android {
+    namespace 'tw.tripshare'
+    compileSdk 37
+
+    defaultConfig {
+        // A separate id for the prototype, so it installs beside the Flutter
+        // app instead of over it.
+        applicationId 'com.charliechen.sharetrip.kmp'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '0.0.1'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            // Debug-signed so CI can build it without the release keystore.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources.excludes += ['/META-INF/{AL2.0,LGPL2.1}', 'DebugProbesKt.bin']
+    }
+}
+
+dependencies {
+    implementation project(':composeApp')
+    implementation 'org.jetbrains.compose.runtime:runtime:1.12.2'
+    implementation 'androidx.activity:activity-compose:1.11.0'
+}

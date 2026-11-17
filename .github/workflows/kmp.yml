@@ -28,11 +28,11 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew --no-daemon :composeApp:assembleRelease :composeApp:wasmJsBrowserDistribution
+      - run: ./gradlew --no-daemon :androidApp:assembleRelease :composeApp:wasmJsBrowserDistribution
       - name: Sizes
         run: |
           command -v brotli >/dev/null || sudo apt-get install -y -qq brotli
-          apk=$(ls composeApp/build/outputs/apk/release/*.apk | head -1)
+          apk=$(ls androidApp/build/outputs/apk/release/*.apk | head -1)
           web=composeApp/build/dist/wasmJs/productionExecutable
           {
             echo "## Kotlin 版大小"
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: kotlin-android-apk
-          path: kmp/composeApp/build/outputs/apk/release/*.apk
+          path: kmp/androidApp/build/outputs/apk/release/*.apk
       - uses: actions/upload-artifact@v4
         with:
           name: kotlin-web
