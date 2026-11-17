@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
 import 'screens/nickname_screen.dart';
 import 'screens/trip_list_screen.dart';
+import 'services/account.dart';
 import 'services/exchange_rates.dart';
 import 'services/trip_repository.dart';
 import 'theme.dart';
@@ -36,10 +38,20 @@ class _BootState extends State<_Boot> {
       await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform);
     }
+    final firestore = FirebaseFirestore.instance;
+    if (kIsWeb) {
+      // Off by default on the web; without it the app shows nothing offline.
+      firestore.settings = const Settings(persistenceEnabled: true);
+    }
     final auth = FirebaseAuth.instance;
-    final user = auth.currentUser ??
-        (await auth.signInAnonymously().timeout(_timeout)).user!;
-    return TripRepository(firestore: FirebaseFirestore.instance, uid: user.uid);
+    // On the web the saved sign-in is restored asynchronously, so
+    // currentUser is still null here; signing in again would make a new
+    // anonymous user who is in none of this person's trips.
+    final saved = auth.currentUser ??
+        await auth.authStateChanges().first.timeout(_timeout);
+    final user =
+        saved ?? (await auth.signInAnonymously().timeout(_timeout)).user!;
+    return TripRepository(firestore: firestore, uid: user.uid);
   }
 
   @override
@@ -48,7 +60,15 @@ class _BootState extends State<_Boot> {
       future: _ready,
       builder: (context, snap) {
         if (snap.hasData) {
-          return TripShareApp(repo: snap.data!, rates: ExchangeRates());
+          return TripShareApp(
+            // A new key per session, so nothing from the old identity's
+            // screens survives a switch.
+            key: ValueKey(snap.data!.uid),
+            repo: snap.data!,
+            rates: ExchangeRates(),
+            account: FirebaseAccount(FirebaseAuth.instance),
+            restart: () => setState(() => _ready = _start()),
+          );
         }
         return MaterialApp(
           theme: buildAppTheme(),
@@ -95,30 +115,50 @@ class AppScope extends InheritedWidget {
     required this.repo,
     required this.rates,
     required super.child,
+    this.account,
+    this.restart = _noop,
   });
 
   final TripRepository repo;
   final ExchangeRates rates;
+
+  /// Google backup of the identity; null in tests.
+  final Account? account;
+
+  /// Starts a new session after the signed-in user changed.
+  final VoidCallback restart;
+
+  static void _noop() {}
 
   static AppScope of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!;
 
   @override
   bool updateShouldNotify(AppScope old) =>
-      repo != old.repo || rates != old.rates;
+      repo != old.repo || rates != old.rates || account != old.account;
 }
 
 class TripShareApp extends StatelessWidget {
-  const TripShareApp({super.key, required this.repo, required this.rates});
+  const TripShareApp({
+    super.key,
+    required this.repo,
+    required this.rates,
+    this.account,
+    this.restart = AppScope._noop,
+  });
 
   final TripRepository repo;
   final ExchangeRates rates;
+  final Account? account;
+  final VoidCallback restart;
 
   @override
   Widget build(BuildContext context) {
     return AppScope(
       repo: repo,
       rates: rates,
+      account: account,
+      restart: restart,
       child: MaterialApp(
         title: '同遊',
         locale: const Locale('zh', 'TW'),

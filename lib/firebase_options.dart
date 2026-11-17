@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -56,7 +53,6 @@ class DefaultFirebaseOptions {
     projectId: 'tripshare-f6209',
     storageBucket: 'tripshare-f6209.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDbPUL3Sn_8Yz0n64CeQdr_ob7zsoh0HnU',
     appId: '1:307482465264:ios:2a529e9649d39bbb3d0335',
@@ -64,5 +60,13 @@ class DefaultFirebaseOptions {
     projectId: 'tripshare-f6209',
     storageBucket: 'tripshare-f6209.firebasestorage.app',
     iosBundleId: 'com.charliechen.sharetrip',
+  );
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCUpTpd83q0uwAXZSd62i7-u5eA13Uuz1E',
+    appId: '1:307482465264:web:4ff23232bc0db95e3d0335',
+    messagingSenderId: '307482465264',
+    projectId: 'tripshare-f6209',
+    authDomain: 'tripshare-f6209.firebaseapp.com',
+    storageBucket: 'tripshare-f6209.firebasestorage.app',
   );
 }

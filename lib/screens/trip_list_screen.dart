@@ -5,6 +5,7 @@ import '../models/trip.dart';
 import '../services/trip_repository.dart';
 import '../theme.dart';
 import '../widgets/dates.dart';
+import 'account_sheet.dart';
 import 'join_trip_screen.dart';
 import 'trip_form_screen.dart';
 import 'trip_screen.dart';
@@ -21,6 +22,14 @@ class TripListScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('我的旅程'),
         actions: [
+          if (AppScope.of(context).account != null)
+            IconButton(
+              tooltip: '備份我的身分',
+              icon: Icon(AppScope.of(context).account!.linkedEmail == null
+                  ? Icons.shield_outlined
+                  : Icons.verified_user_outlined),
+              onPressed: () => showAccountSheet(context),
+            ),
           IconButton(
             tooltip: '用邀請碼加入',
             icon: const Icon(Icons.group_add_outlined),

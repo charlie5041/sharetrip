@@ -174,6 +174,15 @@ describe('inside a trip', () => {
     b.delete(doc(f, 'trips/t1/members/bob'));
     await assertSucceeds(b.commit());
   });
+
+  test('a member who lost their sign-in can take their member back', async () => {
+    await seedTrip(['alice', 'bob', 'bob2']);
+    const f = db('bob2');
+    const b = writeBatch(f);
+    b.update(doc(f, 'trips/t1/members/bob'), { uid: 'bob2', relinkedAt: 2 });
+    b.delete(doc(f, 'trips/t1/members/bob2'));
+    await assertSucceeds(b.commit());
+  });
 });
 
 describe('users', () => {
