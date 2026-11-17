@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../widgets/ui.dart';
 import '../models/currency.dart';
 import '../widgets/dates.dart';
 import 'trip_screen.dart';
@@ -41,13 +42,19 @@ class _TripFormScreenState extends State<TripFormScreen> {
     if (_name.text.trim().isEmpty || _range == null) return;
     setState(() => _saving = true);
     final nav = Navigator.of(context);
-    final id = await AppScope.of(context).repo.createTrip(
+    final repo = AppScope.of(context).repo;
+    final id = repo.newTripId();
+    writeInBackground(
+      context,
+      repo.createTrip(
+          id: id,
           name: _name.text,
           baseCurrency: _currency,
           startDate: ymd(_range!.start),
           endDate: ymd(_range!.end),
           nickname: widget.nickname,
-        );
+        ),
+    );
     nav.pushReplacement(
         MaterialPageRoute(builder: (_) => TripScreen(tripId: id)));
   }

@@ -62,5 +62,17 @@ String? trimmedOrNull(TextEditingController c) =>
     c.text.trim().isEmpty ? null : c.text.trim();
 
 /// Whether the platform asked for reduced motion.
+/// Starts a Firestore write without waiting for the server. Offline, the
+/// write is applied to the local cache at once and sent when the device is
+/// back online, but its future only completes then; a screen that awaited
+/// it would sit there with its button disabled. A rejected write (rules,
+/// a deleted trip) is shown as a snack bar.
+void writeInBackground(BuildContext context, Future<void> write) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  write.catchError((Object e) {
+    messenger?.showSnackBar(SnackBar(content: Text('沒有存成功：$e')));
+  });
+}
+
 bool reduceMotion(BuildContext context) =>
     MediaQuery.maybeDisableAnimationsOf(context) ?? false;

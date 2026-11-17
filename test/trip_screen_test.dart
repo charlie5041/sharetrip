@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,4 +97,50 @@ void main() {
     await tester.pump();
     expect(find.text('請填項目名稱', skipOffstage: false), findsNothing);
   });
+
+  testWidgets('saving offline closes the form instead of waiting for the server',
+      (tester) async {
+    final repo = _OfflineRepo(FakeFirebaseFirestore());
+    final id = await repo.createTrip(
+      name: '大阪',
+      baseCurrency: 'TWD',
+      startDate: '2026-12-20',
+      endDate: '2026-12-24',
+      nickname: '小明',
+    );
+    await tester.pumpWidget(AppScope(
+      repo: repo,
+      rates: ExchangeRates(),
+      child: MaterialApp(
+        theme: buildAppTheme(),
+        home: TripScreen(tripId: id, initialTab: 3),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('記一筆'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '拉麵');
+    await tester.enterText(
+        find.widgetWithText(TextField, '金額', skipOffstage: false), '1000');
+    final save = find.widgetWithText(FilledButton, '儲存');
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(repo.pendingWrites, 1);
+    expect(find.widgetWithText(FilledButton, '儲存'), findsNothing);
+  });
+}
+
+/// Writes that never hear back from the server, like a phone offline.
+class _OfflineRepo extends TripRepository {
+  _OfflineRepo(FakeFirebaseFirestore db) : super(firestore: db, uid: 'me');
+  int pendingWrites = 0;
+
+  @override
+  Future<void> saveExpense(String tripId, Expense e) {
+    pendingWrites++;
+    return Completer<void>().future;
+  }
 }

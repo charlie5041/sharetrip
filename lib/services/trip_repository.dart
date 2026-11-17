@@ -76,15 +76,20 @@ class TripRepository {
   Stream<Trip> watchTrip(String tripId) =>
       _trips.doc(tripId).snapshots().map((d) => Trip.fromMap(d.id, d.data()!));
 
+  /// A fresh trip id, so a screen can open the trip before the write
+  /// reaches the server (it may be offline).
+  String newTripId() => _trips.doc().id;
+
   /// Creates a trip with this device as its first member.
   Future<String> createTrip({
+    String? id,
     required String name,
     required String baseCurrency,
     required String startDate,
     required String endDate,
     required String nickname,
   }) async {
-    final ref = _trips.doc();
+    final ref = _trips.doc(id);
     final batch = _db.batch()
       ..set(ref, {
         'name': name.trim(),
