@@ -34,7 +34,7 @@ private val trunk = Color(0xFFC9A36A)
 private val white = Color.White
 
 /** One shape of a drawing: filled with [fill] (none when null), outlined with [stroke]. */
-private class Mark(
+internal class Mark(
     val path: Path,
     val fill: Color?,
     val stroke: Color? = ink,
