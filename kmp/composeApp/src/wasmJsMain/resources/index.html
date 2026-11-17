@@ -17,7 +17,8 @@
     // a browser without WebAssembly GC), so a tester can tell us why.
     function showError(msg) {
       var s = document.getElementById('status');
-      if (s) s.textContent = '無法啟動：\n' + msg + '\n\n' + navigator.userAgent;
+      if (!s) { s = document.createElement('div'); s.id = 'status'; s.style.background = '#FFFCF6'; s.style.zIndex = 9; document.body.appendChild(s); }
+      s.textContent = '無法啟動：\n' + msg + '\n\n' + navigator.userAgent;
     }
     window.addEventListener('error', function (e) { showError(e.message || String(e.error)); });
     window.addEventListener('unhandledrejection', function (e) { showError(String(e.reason && (e.reason.stack || e.reason))); });
