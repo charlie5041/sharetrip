@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,6 +142,7 @@ fun InkField(
     maxLength: Int = 200,
     error: String? = null,
     capitalize: Boolean = false,
+    keyboard: KeyboardType = KeyboardType.Text,
     onDone: (() -> Unit)? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -153,6 +155,7 @@ fun InkField(
             cursorBrush = SolidColor(AppColors.ink),
             keyboardOptions = KeyboardOptions(
                 capitalization = if (capitalize) KeyboardCapitalization.Characters else KeyboardCapitalization.None,
+                keyboardType = keyboard,
                 imeAction = if (onDone != null) ImeAction.Done else ImeAction.Default,
             ),
             keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
@@ -162,6 +165,36 @@ fun InkField(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
         if (error != null) Txt(error, size = 13, color = AppColors.error)
+    }
+}
+
+/** One option in a row of choices, e.g. a category or a split mode. */
+@Composable
+fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = AppColors.coral) {
+    Box(
+        modifier.heightIn(min = 40.dp).clip(AppShape.pill)
+            .border(2.dp, if (selected) AppColors.ink else AppColors.faint, AppShape.pill)
+            .background(if (selected) color else AppColors.white, AppShape.pill)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) { Txt(text, size = 15, bold = selected) }
+}
+
+/** A square tick box with a label, the whole row tappable. */
+@Composable
+fun CheckRow(text: String, checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.heightIn(min = 44.dp).clip(AppShape.small).clickable(role = Role.Checkbox, onClick = onToggle),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier.size(26.dp).border(2.dp, AppColors.ink, AppShape.tiny)
+                .background(if (checked) AppColors.wakatake else AppColors.white, AppShape.tiny),
+            contentAlignment = Alignment.Center,
+        ) { if (checked) Txt("✓", size = 16, bold = true) }
+        Txt(text)
     }
 }
 

@@ -197,13 +197,31 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
             .commit()
     }
 
-    // ---- The rest of a trip (screens arrive in later steps) -----------------
+    // ---- Expenses and settlements ------------------------------------------
 
     fun watchExpenses(tripId: String): Flow<List<Expense>> =
         sub(tripId, "expenses").watch(Expense::fromMap).map { l -> l.sortedByDescending { it.occurredAt } }
 
+    /** Creates [e] when its id is empty, otherwise replaces it. */
+    suspend fun saveExpense(tripId: String, e: Expense) {
+        val data = e.toMap() + mapOf("updatedAt" to nowMillis(), "createdBy" to e.createdBy.ifEmpty { uid })
+        if (e.id.isEmpty()) sub(tripId, "expenses").add(data) else sub(tripId, "expenses").document(e.id).set(data)
+    }
+
+    suspend fun deleteExpense(tripId: String, expenseId: String) = sub(tripId, "expenses").document(expenseId).delete()
+
     fun watchSettlements(tripId: String): Flow<List<Settlement>> =
         sub(tripId, "settlements").watch(Settlement::fromMap).map { l -> l.sortedByDescending { it.at } }
+
+    suspend fun addSettlement(tripId: String, fromId: String, toId: String, amountMinor: Long) {
+        sub(tripId, "settlements").add(
+            mapOf("fromId" to fromId, "toId" to toId, "amountMinor" to amountMinor, "at" to nowMillis(), "createdBy" to uid),
+        )
+    }
+
+    suspend fun deleteSettlement(tripId: String, id: String) = sub(tripId, "settlements").document(id).delete()
+
+    // ---- The rest of a trip (screens arrive in later steps) -----------------
 
     fun watchItems(tripId: String): Flow<List<ItineraryItem>> =
         sub(tripId, "items").watch(ItineraryItem::fromMap).map { l -> l.sortedWith(ItineraryItem.timelineOrder) }

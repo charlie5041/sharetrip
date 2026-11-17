@@ -4,7 +4,13 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import dev.gitlive.firebase.FirebaseOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.Calendar
 import java.security.SecureRandom
 
 lateinit var appContext: Context
@@ -15,7 +21,34 @@ actual val isWeb: Boolean = false
 
 actual fun nowMillis(): Long = System.currentTimeMillis()
 
-actual fun today(): LocalDate = java.time.LocalDate.now().let { LocalDate(it.year, it.monthValue, it.dayOfMonth) }
+// java.util.Calendar rather than java.time, which needs Android 8 and minSdk is 24.
+actual fun today(): LocalDate = localDateTime(nowMillis()).date
+
+actual fun localDateTime(millis: Long): LocalDateTime {
+    val c = Calendar.getInstance().apply { timeInMillis = millis }
+    return LocalDateTime(
+        c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
+        c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE),
+    )
+}
+
+actual fun localMillis(dt: LocalDateTime): Long = Calendar.getInstance().apply {
+    clear()
+    set(dt.year, dt.month.ordinal, dt.day, dt.hour, dt.minute)
+}.timeInMillis
+
+actual suspend fun httpGetText(url: String): String? = withContext(Dispatchers.IO) {
+    runCatching {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        try {
+            if (conn.responseCode != 200) null else conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
+    }.getOrNull()
+}
 
 private val random = SecureRandom()
 

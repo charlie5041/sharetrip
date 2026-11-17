@@ -3,7 +3,10 @@
 package tw.tripshare
 
 import dev.gitlive.firebase.FirebaseOptions
+import kotlinx.coroutines.await
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlin.js.Promise
 
 actual fun platformContext(): Any? = null
 
@@ -19,6 +22,24 @@ private fun jsCopy(text: String): Unit = js("navigator.clipboard && navigator.cl
 actual fun nowMillis(): Long = jsNow().toLong()
 
 actual fun today(): LocalDate = LocalDate(jsYear(), jsMonth(), jsDay())
+
+private fun jsParts(ms: Double): String =
+    js("(() => { const d = new Date(ms); return [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()].join(','); })()")
+
+private fun jsLocalMs(y: Int, mo: Int, d: Int, h: Int, mi: Int): Double = js("new Date(y, mo - 1, d, h, mi).getTime()")
+
+private fun jsFetchText(url: String): Promise<JsString?> =
+    js("fetch(url).then(r => r.ok ? r.text() : null).catch(() => null)")
+
+actual fun localDateTime(millis: Long): LocalDateTime {
+    val p = jsParts(millis.toDouble()).split(',').map { it.toInt() }
+    return LocalDateTime(p[0], p[1], p[2], p[3], p[4])
+}
+
+actual fun localMillis(dt: LocalDateTime): Long =
+    jsLocalMs(dt.year, dt.month.ordinal + 1, dt.day, dt.hour, dt.minute).toLong()
+
+actual suspend fun httpGetText(url: String): String? = runCatching { jsFetchText(url).await<JsString?>()?.toString() }.getOrNull()
 
 actual fun secureRandomBytes(n: Int): ByteArray = ByteArray(n) { jsRandomByte().toByte() }
 

@@ -34,6 +34,7 @@ object AppShape {
     val radius = RoundedCornerShape(20.dp)
     val small = RoundedCornerShape(14.dp)
     val pill = RoundedCornerShape(999.dp)
+    val tiny = RoundedCornerShape(6.dp)
 }
 
 val LocalTextStyle = staticCompositionLocalOf { TextStyle.Default }
