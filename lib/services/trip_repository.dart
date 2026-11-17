@@ -73,14 +73,16 @@ class TripRepository {
       .map((s) => s.docs.map((d) => Trip.fromMap(d.id, d.data())).toList()
         ..sort((a, b) => b.startDate.compareTo(a.startDate)));
 
-  Stream<Trip> watchTrip(String tripId) =>
-      _trips.doc(tripId).snapshots().map((d) => Trip.fromMap(d.id, d.data()!));
+  /// Null once the trip is gone (its owner dissolved it).
+  Stream<Trip?> watchTrip(String tripId) => _trips.doc(tripId).snapshots().map(
+      (d) => d.exists ? Trip.fromMap(d.id, d.data()!) : null);
 
   /// A fresh trip id, so a screen can open the trip before the write
   /// reaches the server (it may be offline).
   String newTripId() => _trips.doc().id;
 
-  /// Creates a trip with this device as its first member.
+  /// Creates a trip with this device as its owner and first member, plus
+  /// a place for each of [others]; friends take those places when they join.
   Future<String> createTrip({
     String? id,
     required String name,
@@ -88,6 +90,7 @@ class TripRepository {
     required String startDate,
     required String endDate,
     required String nickname,
+    List<String> others = const [],
   }) async {
     final ref = _trips.doc(id);
     final batch = _db.batch()
@@ -106,6 +109,16 @@ class TripRepository {
         'order': 0,
         'joinedAt': _now,
       });
+    var order = 1;
+    for (final n in others) {
+      if (n.trim().isEmpty) continue;
+      batch.set(_members(ref.id).doc(), {
+        'name': n.trim(),
+        'uid': null,
+        'order': order++,
+        'joinedAt': _now,
+      });
+    }
     await batch.commit();
     return ref.id;
   }
@@ -125,8 +138,9 @@ class TripRepository {
           s.docs.map((d) => Member.fromMap(d.id, d.data())).toList()
             ..sort((a, b) => a.order.compareTo(b.order)));
 
-  /// Adds someone who has no phone with the app, by name only.
-  Future<void> addNameOnlyMember(String tripId, String name) async {
+  /// Adds a place for someone, by name. They take it when they join, or it
+  /// stays a name only (a grandparent without the app). Owner only.
+  Future<void> addMember(String tripId, String name) async {
     final existing = await _members(tripId).get();
     final nextOrder = existing.docs.fold<int>(
             -1, (m, d) => max(m, d.data()['order'] as int? ?? 0)) +
@@ -188,46 +202,73 @@ class TripRepository {
     return PendingJoin(code: code, tripId: tripId);
   }
 
-  /// Joins the trip as a new member called [nickname].
-  Future<void> join(PendingJoin pending, {required String nickname}) async {
+  /// The places in the trip nobody has taken yet, for someone holding a
+  /// checked invite to choose from.
+  Future<List<Member>> openPlaces(PendingJoin pending) async {
+    final snap =
+        await _members(pending.tripId).where('uid', isNull: true).get();
+    return snap.docs.map((d) => Member.fromMap(d.id, d.data())).toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+  }
+
+  /// Joins the trip by taking the open place [memberId].
+  Future<void> join(PendingJoin pending, String memberId) async {
     final batch = _db.batch()
       ..update(_trips.doc(pending.tripId), {
         'memberUids': FieldValue.arrayUnion([uid]),
       })
-      ..set(_members(pending.tripId).doc(uid), {
-        'name': nickname,
+      ..update(_members(pending.tripId).doc(memberId), {
         'uid': uid,
-        // Joined members go after everyone already there; the exact value
-        // only needs to sort last.
-        'order': _now,
         'joinedAt': _now,
       });
     await batch.commit();
   }
 
-  /// Makes this device the person behind member [placeholderId], dropping
-  /// the member this device joined as. Refused while anything still points
-  /// at that member, so no expense is ever orphaned.
-  ///
-  /// [placeholderId] is either a name-only member, or a member whose
-  /// device lost its anonymous sign-in (a new phone, cleared web data) and
-  /// came back through a fresh invite. The second case is stamped with
-  /// relinkedAt so the others can see it happened.
-  Future<void> claimMember(
-      String tripId, String placeholderId, String myMemberId) async {
-    final used = await _isReferenced(tripId, myMemberId);
-    if (used) {
-      throw StateError('你已經有記帳紀錄，無法認領其他名字');
+  /// Removes [m] from the trip. Owner only. Refused while an expense or a
+  /// settlement still points at them, so no balance changes behind
+  /// anyone's back.
+  Future<void> removeMember(String tripId, Member m) async {
+    if (await _isReferenced(tripId, m.id)) {
+      throw StateError('「${m.name}」已經有記帳紀錄，要先刪掉或改掉相關的帳才能移除');
     }
-    final target = await _members(tripId).doc(placeholderId).get();
-    final relink = target.data()?['uid'] != null;
-    final batch = _db.batch()
-      ..update(_members(tripId).doc(placeholderId), {
-        'uid': uid,
-        if (relink) 'relinkedAt': _now,
-      })
-      ..delete(_members(tripId).doc(myMemberId));
+    final batch = _db.batch()..delete(_members(tripId).doc(m.id));
+    if (m.uid != null) {
+      batch.update(_trips.doc(tripId), {
+        'memberUids': FieldValue.arrayRemove([m.uid]),
+      });
+    }
     await batch.commit();
+  }
+
+  /// Frees [m]'s place, keeping their name and expenses, so they can take
+  /// it again from a new phone with a fresh invite. Owner only.
+  Future<void> unbindMember(String tripId, Member m) async {
+    if (m.uid == null) return;
+    final batch = _db.batch()
+      ..update(_members(tripId).doc(m.id), {'uid': null})
+      ..update(_trips.doc(tripId), {
+        'memberUids': FieldValue.arrayRemove([m.uid]),
+      });
+    await batch.commit();
+  }
+
+  /// Deletes the trip and everything in it. Owner only.
+  Future<void> dissolveTrip(String tripId) async {
+    final ref = _trips.doc(tripId);
+    for (final sub in const [
+      'expenses', 'settlements', 'items', 'flights', 'lodgings', 'checklist',
+      'members',
+    ]) {
+      final docs = (await ref.collection(sub).get()).docs;
+      for (var k = 0; k < docs.length; k += 400) {
+        final batch = _db.batch();
+        for (final d in docs.skip(k).take(400)) {
+          batch.delete(d.reference);
+        }
+        await batch.commit();
+      }
+    }
+    await ref.delete();
   }
 
   Future<bool> _isReferenced(String tripId, String memberId) async {

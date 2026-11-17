@@ -76,15 +76,27 @@ class _TripScreenState extends State<TripScreen> {
   List<ChecklistEntry>? _checklist;
   late int _tab = widget.initialTab;
 
+  /// The trip was dissolved, or this device is no longer one of its
+  /// members (the owner removed or freed its place).
+  bool _gone = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_subs.isNotEmpty) return;
     final repo = AppScope.of(context).repo;
     final id = widget.tripId;
-    void on<T>(Stream<T> s, void Function(T) set) =>
-        _subs.add(s.listen((v) => setState(() => set(v))));
-    on(repo.watchTrip(id), (v) => _trip = v);
+    void on<T>(Stream<T> s, void Function(T) set) => _subs.add(s.listen(
+          (v) => setState(() => set(v)),
+          onError: (Object _) => setState(() => _gone = true),
+        ));
+    on(repo.watchTrip(id), (v) {
+      if (v == null) {
+        _gone = true;
+      } else {
+        _trip = v;
+      }
+    });
     on(repo.watchMembers(id), (v) => _members = v);
     on(repo.watchExpenses(id), (v) => _expenses = v);
     on(repo.watchSettlements(id), (v) => _settlements = v);
@@ -104,6 +116,18 @@ class _TripScreenState extends State<TripScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_gone) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text('這趟旅程已經解散，或你已經不在成員名單裡。',
+                textAlign: TextAlign.center),
+          ),
+        ),
+      );
+    }
     if ([_trip, _members, _expenses, _settlements, _items, _flights,
         _lodgings, _checklist].contains(null)) {
       return Scaffold(

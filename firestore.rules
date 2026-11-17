@@ -34,11 +34,15 @@ service cloud.firestore {
         && request.resource.data.ownerUid == me()
         && request.resource.data.memberUids == [me()];
 
-      // Members may edit the trip, but not take it from its owner or drop
-      // other members from memberUids.
+      // Members may edit the trip's details. Who is in it (memberUids) is
+      // the owner's to change, and the owner always stays in.
       allow update: if signedIn() && me() in resource.data.memberUids
         && request.resource.data.ownerUid == resource.data.ownerUid
-        && request.resource.data.memberUids.hasAll(resource.data.memberUids);
+        && (!('memberUids' in request.resource.data.diff(resource.data).affectedKeys())
+            || (resource.data.ownerUid == me()
+                && me() in request.resource.data.memberUids));
+
+      allow delete: if signedIn() && resource.data.ownerUid == me();
 
       // Joining: a non-member adds exactly their own uid, backed by an
       // unexpired invite for this trip whose code they wrote to their user
@@ -59,11 +63,43 @@ service cloud.firestore {
       // Everything inside a trip is open to its members. Someone joining
       // writes their own member document in the same batch as the join,
       // so that one checks the trip as it will be after the batch.
+      // The owner sets up the list of members; a friend joins by taking a
+      // place nobody has taken (uid null), backed by a valid invite.
       match /members/{memberId} {
-        allow read, write: if isMember(tripId);
-        allow create: if signedIn() && memberId == me()
+        function ownerAfter() {
+          return getAfter(/databases/$(database)/documents/trips/$(tripId)).data.ownerUid == me();
+        }
+        function changed() {
+          return request.resource.data.diff(resource.data).affectedKeys();
+        }
+
+        allow read: if isMember(tripId);
+        // Someone holding a valid invite sees which places are still open.
+        allow list: if signedIn() && validJoin(tripId);
+
+        // Also covers the batch that creates the trip with its members.
+        allow create: if signedIn() && ownerAfter()
+          && (request.resource.data.uid == null || request.resource.data.uid == me());
+
+        // The owner renames anyone and frees a place (uid back to null),
+        // but cannot hand a place to someone else's uid.
+        allow update: if signedIn() && isMember(tripId)
+          && trip(tripId).ownerUid == me()
+          && (request.resource.data.uid == resource.data.uid
+              || request.resource.data.uid == null);
+        // Anyone renames themself.
+        allow update: if signedIn() && isMember(tripId)
+          && resource.data.uid == me()
+          && changed().hasOnly(['name']);
+        // Joining: take an open place, in the same batch as the join.
+        allow update: if signedIn() && resource.data.uid == null
           && request.resource.data.uid == me()
+          && changed().hasOnly(['uid', 'joinedAt'])
+          && validJoin(tripId)
           && me() in getAfter(/databases/$(database)/documents/trips/$(tripId)).data.memberUids;
+
+        allow delete: if signedIn() && isMember(tripId)
+          && trip(tripId).ownerUid == me();
       }
       match /{sub}/{docId} {
         allow read, write: if sub in ['expenses', 'settlements', 'items', 'checklist',
