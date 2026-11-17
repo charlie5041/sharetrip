@@ -137,7 +137,7 @@ jobs:
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      TESTER_GROUPS: ${{ vars.FIREBASE_TESTER_GROUPS || 'friends' }}
+      TESTER_GROUPS: ${{ vars.FIREBASE_TESTER_GROUPS || 'friends_android' }}
     steps:
       - uses: actions/checkout@v5
         with:
