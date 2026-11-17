@@ -49,6 +49,24 @@ jobs:
             done | sort -rn | head -20)
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # Opens the web build at phone and desktop sizes; fails on a start-up crash.
+      - name: Web smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
+          npm init -y >/dev/null && npm install --silent playwright@1.56.1
+          npx playwright install --with-deps chromium >/dev/null
+          cp "$GITHUB_WORKSPACE/kmp/tools/smoke.mjs" .
+          (cd "$GITHUB_WORKSPACE/kmp/composeApp/build/dist/wasmJs/productionExecutable" && python3 -m http.server 8080 >/dev/null 2>&1 &)
+          sleep 2
+          node smoke.mjs http://localhost:8080/ "$RUNNER_TEMP/smoke"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kotlin-web-screenshots
+          path: ${{ runner.temp }}/smoke/*.png
       - uses: actions/upload-artifact@v4
         with:
           name: kotlin-android-apk
