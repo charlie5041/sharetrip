@@ -57,7 +57,6 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
           npm init -y >/dev/null && npm install --silent playwright@1.56.1
-          npx playwright install --with-deps chromium >/dev/null
           cp "$GITHUB_WORKSPACE/kmp/tools/smoke.mjs" .
           (cd "$GITHUB_WORKSPACE/kmp/composeApp/build/dist/wasmJs/productionExecutable" && python3 -m http.server 8080 >/dev/null 2>&1 &)
           sleep 2

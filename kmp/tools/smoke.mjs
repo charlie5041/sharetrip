@@ -5,7 +5,8 @@ import { chromium } from 'playwright';
 
 const [url, outDir] = process.argv.slice(2);
 const sizes = { phone: { width: 390, height: 844 }, desktop: { width: 1440, height: 900 } };
-const browser = await chromium.launch();
+// The runner's own Chrome, so no browser download is needed.
+const browser = await chromium.launch({ channel: 'chrome' });
 let failed = false;
 for (const [name, viewport] of Object.entries(sizes)) {
   const page = await browser.newPage({ viewport });
