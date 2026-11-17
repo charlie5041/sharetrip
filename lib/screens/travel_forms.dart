@@ -133,7 +133,9 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       return;
     }
     final nav = Navigator.of(context);
-    await AppScope.of(context).repo.saveItem(
+    writeInBackground(
+      context,
+      AppScope.of(context).repo.saveItem(
           widget.tripId,
           ItineraryItem(
             id: widget.existing?.id ?? '',
@@ -147,7 +149,8 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
             mustGo: _mustGo,
             order: widget.existing?.order ?? 0,
           ),
-        );
+        ),
+    );
     nav.pop();
   }
 
@@ -155,7 +158,9 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
     final repo = AppScope.of(context).repo;
     final nav = Navigator.of(context);
     if (await confirmDelete(context, '這個行程')) {
-      await repo.deleteItem(widget.tripId, widget.existing!.id);
+      if (!mounted) return;
+      writeInBackground(
+          context, repo.deleteItem(widget.tripId, widget.existing!.id));
       nav.pop();
     }
   }
@@ -272,7 +277,9 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
       return;
     }
     final nav = Navigator.of(context);
-    await AppScope.of(context).repo.saveFlight(
+    writeInBackground(
+      context,
+      AppScope.of(context).repo.saveFlight(
           widget.tripId,
           Flight(
             id: widget.existing?.id ?? '',
@@ -288,7 +295,8 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
             arriveTime: _arriveTime,
             note: trimmedOrNull(_note),
           ),
-        );
+        ),
+    );
     nav.pop();
   }
 
@@ -296,7 +304,9 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
     final repo = AppScope.of(context).repo;
     final nav = Navigator.of(context);
     if (await confirmDelete(context, '這個航班')) {
-      await repo.deleteFlight(widget.tripId, widget.existing!.id);
+      if (!mounted) return;
+      writeInBackground(
+          context, repo.deleteFlight(widget.tripId, widget.existing!.id));
       nav.pop();
     }
   }
@@ -404,7 +414,9 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       return;
     }
     final nav = Navigator.of(context);
-    await AppScope.of(context).repo.saveLodging(
+    writeInBackground(
+      context,
+      AppScope.of(context).repo.saveLodging(
           widget.tripId,
           Lodging(
             id: widget.existing?.id ?? '',
@@ -416,7 +428,8 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
             confirmation: trimmedOrNull(_conf),
             note: trimmedOrNull(_note),
           ),
-        );
+        ),
+    );
     nav.pop();
   }
 
@@ -424,7 +437,9 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     final repo = AppScope.of(context).repo;
     final nav = Navigator.of(context);
     if (await confirmDelete(context, '這個住宿')) {
-      await repo.deleteLodging(widget.tripId, widget.existing!.id);
+      if (!mounted) return;
+      writeInBackground(
+          context, repo.deleteLodging(widget.tripId, widget.existing!.id));
       nav.pop();
     }
   }

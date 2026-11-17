@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../logic/split.dart';
 import '../main.dart';
+import '../widgets/ui.dart';
 import '../models/currency.dart';
 import '../models/expense.dart';
 import '../theme.dart';
@@ -160,9 +161,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
     final e = _build();
     if (e == null) return;
     setState(() => _saving = true);
-    final nav = Navigator.of(context);
-    await AppScope.of(context).repo.saveExpense(data.trip.id, e);
-    nav.pop();
+    writeInBackground(
+        context, AppScope.of(context).repo.saveExpense(data.trip.id, e));
+    Navigator.of(context).pop();
   }
 
   Future<void> _delete() async {
@@ -181,11 +182,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final nav = Navigator.of(context);
-    await AppScope.of(context)
-        .repo
-        .deleteExpense(data.trip.id, widget.existing!.id);
-    nav.pop();
+    writeInBackground(context,
+        AppScope.of(context).repo.deleteExpense(data.trip.id, widget.existing!.id));
+    Navigator.of(context).pop();
   }
 
   Future<void> _pickWhen() async {
