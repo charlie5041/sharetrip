@@ -44,7 +44,7 @@
   "hosting": [
     {
       "site": "tripshare-tw",
-      "public": "build/web",
+      "public": "kmp/composeApp/build/dist/wasmJs/productionExecutable",
       "ignore": [
         "firebase.json",
         "**/.*"

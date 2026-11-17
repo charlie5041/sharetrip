@@ -12,8 +12,8 @@ import tw.tripshare.platformName
  * fields and limits as the Flutter app, which the security rules enforce.
  */
 object Reporter {
-    /** Shown in reports so they say which build; "k" marks the Kotlin app. */
-    const val VERSION = "0.2.0-k"
+    /** Shown in reports so they say which build. */
+    const val VERSION = tw.tripshare.APP_VERSION
 
     private const val MAX_ERRORS = 20
     private const val MAX_MESSAGE = 2000

@@ -10,26 +10,29 @@ on:
   workflow_dispatch:
     inputs:
       platform:
-        description: Which build to send (both = every platform)
+        description: Which build to send (both = Android and web)
         type: choice
-        options: [both, ios, android, web]
+        options: [both, android, web]
         default: both
 
 jobs:
-  flutter:
-    name: Analyze and test
+  # The app is the Kotlin version in kmp/. Its full Android and web builds
+  # run on pull requests in kmp.yml; here only the shared logic's tests,
+  # which need no Android SDK.
+  test:
+    name: Kotlin tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kmp
     steps:
       - uses: actions/checkout@v5
-      - uses: subosito/flutter-action@v2
+      - uses: actions/setup-java@v5
         with:
-          # Same SDK as BabyCalendar, so both apps build on the family Mac.
-          flutter-version: 3.47.5
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew --no-daemon -Ptripshare.android=false :core:jvmTest
 
   rules:
     name: Firestore rules
@@ -50,8 +53,8 @@ jobs:
       - run: npm test
         working-directory: test/rules
 
-  # Did this push to main change `version` in pubspec.yaml? Raising the
-  # build number is what ships a build to testers; other pushes don't.
+  # Did this push to main change versionCode in kmp/version.properties?
+  # Raising it is what ships a build to testers; other pushes don't.
   version:
     name: Version changed
     if: >-
@@ -72,9 +75,9 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          now=$(sed -n 's/^version: *//p' pubspec.yaml)
+          now=$(sed -n 's/^versionCode=//p' kmp/version.properties)
           if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            was=$(git show "$BEFORE:pubspec.yaml" | sed -n 's/^version: *//p')
+            was=$(git show "$BEFORE:kmp/version.properties" 2>/dev/null | sed -n 's/^versionCode=//p')
           else
             was=
           fi
@@ -126,10 +129,10 @@ jobs:
   # signed iOS app. It ships with the same version bump as Android.
   deploy-web:
     name: Deploy web app
-    needs: [flutter, rules, version]
+    needs: [test, rules, version]
     if: >-
       needs.version.outputs.changed == 'true' &&
-      inputs.platform != 'android' && inputs.platform != 'ios'
+      inputs.platform != 'android'
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-web
@@ -144,19 +147,20 @@ jobs:
             echo "::error::Repository secret FIREBASE_SERVICE_ACCOUNT is not set"
             exit 1
           fi
-      - uses: subosito/flutter-action@v2
+      - uses: actions/setup-java@v5
         with:
-          flutter-version: 3.47.5
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter build web --release
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew --no-daemon :composeApp:wasmJsBrowserDistribution
+        working-directory: kmp
       - uses: actions/setup-node@v5
         with:
           node-version: 22
       # Fills in the offline cache list; without it the app needs a
       # connection to open.
-      - run: node tool/web_offline.mjs
+      - run: node tools/offline.mjs composeApp/build/dist/wasmJs/productionExecutable
+        working-directory: kmp
       - run: npm install -g firebase-tools
       - name: Deploy
         run: |
@@ -168,11 +172,11 @@ jobs:
 
   distribute:
     name: Distribute Android
-    needs: [flutter, rules, version]
+    needs: [test, rules, version]
     # inputs.platform is empty on a push.
     if: >-
       needs.version.outputs.changed == 'true' &&
-      inputs.platform != 'ios' && inputs.platform != 'web'
+      inputs.platform != 'web'
     runs-on: ubuntu-latest
     concurrency:
       group: distribute-android
@@ -205,12 +209,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.5
-          channel: stable
-          cache: true
+          java-version: 21
       # Copying base64 into the secrets form can wrap it or add spaces,
       # which `base64 -d` rejects; drop them.
       - name: Write signing key
@@ -221,15 +220,15 @@ jobs:
             echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64 — paste the output of 'base64 -i release.jks' again"
             exit 1
           fi
-          cat > android/key.properties <<PROPS
+          cat > kmp/androidApp/key.properties <<PROPS
           storeFile=$RUNNER_TEMP/upload.jks
           storePassword=$ANDROID_KEYSTORE_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
           PROPS
       - uses: gradle/actions/setup-gradle@v5
-      - run: flutter pub get
-      - run: flutter build apk --release
+      - run: ./gradlew --no-daemon :androidApp:assembleRelease
+        working-directory: kmp
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -238,79 +237,3 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
         run: tool/distribute.sh android
-
-  # Builds on the family Mac (a self-hosted runner registered to this
-  # repository, so macOS minutes cost nothing), development-signed for the
-  # Apple team's registered iPhones, and sent through App Distribution.
-  # Setup is in README → 發布設定.
-  distribute-ios:
-    name: Distribute iOS
-    needs: [flutter, rules, version]
-    # Off until the sharetrip runner and iOS secrets are set up: without a
-    # runner the job would sit queued for a day. Turn on with the repo
-    # variable IOS_DISTRIBUTION = true.
-    if: >-
-      needs.version.outputs.changed == 'true' && inputs.platform != 'android' &&
-      inputs.platform != 'web' && vars.IOS_DISTRIBUTION == 'true'
-    runs-on: [self-hosted, macOS]
-    concurrency:
-      group: distribute-ios
-      cancel-in-progress: false
-    env:
-      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      TESTER_GROUPS: ${{ vars.FIREBASE_IOS_TESTER_GROUPS || 'friends_ios' }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Check secrets
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "::error::Repository secret FIREBASE_SERVICE_ACCOUNT is not set"
-            exit 1
-          fi
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.5
-          channel: stable
-      - run: flutter pub get
-      # The runner is a background service, which cannot use the login
-      # keychain's private keys; see tool/ios_keychain.sh.
-      - name: Set up the signing keychain
-        env:
-          IOS_SIGNING_P12: ${{ secrets.IOS_SIGNING_P12 }}
-          IOS_SIGNING_P12_PASSWORD: ${{ secrets.IOS_SIGNING_P12_PASSWORD }}
-        run: tool/ios_keychain.sh setup
-      # A failed Xcode step shows only a bare line; the reason is in the
-      # verbose output, which goes to a file and is filtered on failure.
-      - name: Build IPA
-        run: |
-          log="$RUNNER_TEMP/build-ipa.log"
-          if flutter build ipa --release --verbose \
-               --export-options-plist=ios/ExportOptions.plist > "$log" 2>&1; then
-            tail -n 5 "$log"
-            exit 0
-          fi
-          echo "---- Lines naming the error ----"
-          grep -n -i -E 'error:|errSec|failed|CodeSign|provisioning profile|certificate' "$log" \
-            | grep -v -i 'warning:' | tail -n 150
-          echo "::group::End of the build output"
-          tail -n 80 "$log"
-          echo "::endgroup::"
-          exit 1
-      - name: Remove the signing keychain
-        if: always()
-        run: tool/ios_keychain.sh cleanup
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-      - run: |
-          npm install -g firebase-tools
-          echo "$(npm prefix -g)/bin" >> "$GITHUB_PATH"
-      - name: Upload to App Distribution
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: tool/distribute.sh ios
-      - name: Remove the service account key
-        if: always()
-        run: rm -f "$RUNNER_TEMP/service-account.json"

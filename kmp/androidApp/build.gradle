@@ -2,18 +2,39 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
+def version = new Properties()
+file('../version.properties').withInputStream { version.load(it) }
+
+// The release key, written by CI from repository secrets. Without it (pull
+// requests, local builds) the release build is debug-signed: it runs, but
+// can't install over the testers' app.
+def keyProps = new Properties()
+def keyFile = file('key.properties')
+if (keyFile.exists()) keyFile.withInputStream { keyProps.load(it) }
+
 android {
     namespace 'tw.tripshare'
     compileSdk 37
 
     defaultConfig {
-        // A separate id for the prototype, so it installs beside the Flutter
-        // app instead of over it.
-        applicationId 'com.charliechen.sharetrip.kmp'
+        // The Flutter app's id, so this installs over it and keeps its data
+        // and Google sign-in setup.
+        applicationId 'com.charliechen.sharetrip'
         minSdk 24
         targetSdk 36
-        versionCode 1
-        versionName '0.0.1'
+        versionCode version['versionCode'] as int
+        versionName version['versionName']
+    }
+
+    signingConfigs {
+        if (keyFile.exists()) {
+            release {
+                storeFile file(keyProps['storeFile'])
+                storePassword keyProps['storePassword']
+                keyAlias keyProps['keyAlias']
+                keyPassword keyProps['keyPassword']
+            }
+        }
     }
 
     buildTypes {
@@ -21,8 +42,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
-            // Debug-signed so CI can build it without the release keystore.
-            signingConfig signingConfigs.debug
+            signingConfig keyFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
 

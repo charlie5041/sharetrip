@@ -1,6 +1,8 @@
 # 同遊 TripShare
 
-給朋友一起用的旅遊 app：記帳、多幣別分帳、每日行程。Flutter（Android + iOS）+ Firebase。
+給朋友一起用的旅遊 app：記帳、多幣別分帳、每日行程。Kotlin Compose Multiplatform（Android + 網頁）+ Firebase，程式在 `kmp/`。
+
+> 舊的 Flutter 版（`lib/`、`android/`、`ios/`、`web/`）已不再發布，留著備查，確認新版穩定後再刪。
 
 - 規格與資料模型：[docs/SPEC.md](docs/SPEC.md)
 - 發布方式比照 BabyCalendar（抱寶）：Firebase App Distribution，iOS 由家裡的 Mac 以 self-hosted runner 建置（設定見下方「發布設定」）。
@@ -8,11 +10,13 @@
 ## 開發
 
 ```bash
-flutter pub get
-flutter analyze
-flutter test
-flutter run
+cd kmp
+./gradlew -Ptripshare.android=false :core:jvmTest           # 分帳、日期等邏輯的測試，不需要 Android SDK
+./gradlew :androidApp:assembleRelease                        # Android APK（需要 Android SDK）
+./gradlew :composeApp:wasmJsBrowserDevelopmentRun            # 網頁版，開在本機瀏覽器
 ```
+
+網頁版要支援 WebAssembly GC 的瀏覽器：iPhone 需要 iOS 18.2 以上。
 
 Firestore 安全規則測試（需要 Node 22 和 Java 21）：
 
@@ -22,15 +26,14 @@ cd test/rules && npm install && npm test
 
 ## 發布設定
 
-流程和抱寶一樣：把 `pubspec.yaml` 的 `version`（例如 `1.0.0+1` → `1.0.0+2`）改大並推上 `main`，CI 會：
+把 `kmp/version.properties` 的 `versionCode` 加 1（需要的話一起改 `versionName`）並推上 `main`，CI 會：
 
-1. 跑 `flutter analyze`、`flutter test` 和規則測試。
+1. 跑 Kotlin 邏輯測試和規則測試。
 2. 部署 `firestore.rules`（只要推上 `main` 就會部署，不需要改版號）。
-3. 建 Android APK，發給 App Distribution 群組 `friends_android`。
+3. 建 Android APK（用 release 金鑰簽章，套件名稱和舊版相同，所以會直接更新），發給 App Distribution 群組 `friends_android`。
 4. 建網頁版，部署到 https://tripshare-tw.web.app（iPhone 朋友用 Safari「加入主畫面」使用）。
-5. 在家裡的 Mac（self-hosted runner）建 iOS 開發簽章版，發給群組 `friends_ios`。這一步預設關閉，runner 和 iOS 憑證設好後，在 repo 的 Variables 加 `IOS_DISTRIBUTION` = `true` 才會執行。
 
-沒改版號只想重發，可以在 Actions 頁籤手動執行 CI（`workflow_dispatch`，可選 both / ios / android / web）。
+沒改版號只想重發，可以在 Actions 頁籤手動執行 CI（`workflow_dispatch`，可選 both / android / web）。原生 iOS 版不再發布。
 
 ### 一次性設定
 
