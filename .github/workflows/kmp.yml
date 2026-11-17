@@ -1,8 +1,8 @@
 name: Kotlin rewrite
 
-# Builds the Compose Multiplatform version in kmp/ (Android + web), puts the
-# web build on a temporary preview link, and compares its size with the
-# Flutter app. It never touches the live site or the testers' Android app.
+# Builds the Compose Multiplatform version in kmp/ (Android + web), reports
+# its size and puts the web build on a temporary preview link. It never
+# touches the live site or the testers' Android app.
 on:
   pull_request:
     paths:
@@ -29,6 +29,11 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
       - run: ./gradlew --no-daemon :core:jvmTest :androidApp:assembleRelease :composeApp:wasmJsBrowserDistribution
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # Lists the build's files in sw.js so the web app opens offline.
+      - run: node tools/offline.mjs composeApp/build/dist/wasmJs/productionExecutable
       - name: Sizes
         run: |
           command -v brotli >/dev/null || sudo apt-get install -y -qq brotli
@@ -49,9 +54,6 @@ jobs:
             done | sort -rn | head -20)
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
       # Opens the web build at phone and desktop sizes; fails on a start-up crash.
       - name: Web smoke test
         run: |
@@ -106,40 +108,3 @@ jobs:
           url=$(node -e "const r=require('$RUNNER_TEMP/out.json').result;console.log(Object.values(r)[0].url)")
           echo "## 網頁預覽：$url" >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::Preview $url"
-
-  flutter:
-    name: Flutter sizes (for comparison)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.5
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter build apk --release
-      - run: flutter build web --release
-      - name: Sizes
-        run: |
-          command -v brotli >/dev/null || sudo apt-get install -y -qq brotli
-          web=build/web
-          {
-            echo "## Flutter 版大小"
-            echo "| 項目 | 大小 |"
-            echo "|---|---|"
-            echo "| Android APK（現在發給大家的） | $(du -k build/app/outputs/flutter-apk/app-release.apk | cut -f1) KB |"
-            echo "| 網頁全部檔案 | $(du -sk $web | cut -f1) KB |"
-            echo "| 網頁首次下載（brotli 後，不含 .map） | $(cd $web && for f in $(find . -type f ! -name '*.map' ! -name '*.txt'); do brotli -c -q 11 "$f" | wc -c; done | awk '{s+=$1} END {print int(s/1024)}') KB |"
-            echo
-            echo '```'
-            echo "原始KB  brotliKB  檔案"
-            (cd $web && find . -type f ! -name '*.map' | while read -r f; do
-              printf '%7d %9d  %s\n' $(( $(stat -c%s "$f") / 1024 )) $(( $(brotli -c -q 11 "$f" | wc -c) / 1024 )) "$f"
-            done | sort -rn | head -20)
-            echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"

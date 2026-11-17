@@ -143,6 +143,7 @@ fun InkField(
     error: String? = null,
     capitalize: Boolean = false,
     keyboard: KeyboardType = KeyboardType.Text,
+    lines: Int = 1,
     onDone: (() -> Unit)? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -150,7 +151,11 @@ fun InkField(
         BasicTextField(
             value = value,
             onValueChange = { onValueChange(it.take(maxLength)) },
-            singleLine = true,
+            // Multi-line fields scroll inside themselves; their height must be
+            // bounded or a scrolling page can't measure them.
+            singleLine = lines == 1,
+            minLines = lines,
+            maxLines = if (lines == 1) 1 else lines * 2,
             textStyle = LocalTextStyle.current.copy(fontSize = 18.sp),
             cursorBrush = SolidColor(AppColors.ink),
             keyboardOptions = KeyboardOptions(
@@ -160,6 +165,7 @@ fun InkField(
             ),
             keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
             modifier = Modifier.fillMaxWidth()
+                .then(if (lines > 1) Modifier.heightIn(max = (lines * 2 * 28 + 24).dp) else Modifier)
                 .border(AppShape.border, if (error != null) AppColors.error else AppColors.ink, AppShape.small)
                 .background(AppColors.white, AppShape.small)
                 .padding(horizontal = 14.dp, vertical = 12.dp),

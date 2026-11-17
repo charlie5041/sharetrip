@@ -75,3 +75,27 @@ actual fun openUrl(url: String) {
         )
     }
 }
+
+actual fun platformName(): String = "android ${android.os.Build.VERSION.RELEASE}"
+
+actual fun installCrashHook(onError: (String, String?) -> Unit) {
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { t, e ->
+        // The app dies right after; Firestore keeps the write queued on disk
+        // only if it got that far, so this is best effort.
+        runCatching { onError(e.toString(), e.stackTraceToString()) }
+        previous?.uncaughtException(t, e)
+    }
+}
+
+actual fun installEnv(): InstallEnv? = null
+
+actual suspend fun promptInstall(): Boolean = false
+
+actual fun openInExternalBrowser() {}
+
+private val prefs get() = appContext.getSharedPreferences("tripshare", Context.MODE_PRIVATE)
+
+actual fun loadFlag(key: String): Boolean = prefs.getBoolean(key, false)
+
+actual fun saveFlag(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()

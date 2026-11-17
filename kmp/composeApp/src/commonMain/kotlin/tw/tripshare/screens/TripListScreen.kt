@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -15,7 +18,11 @@ import tw.tripshare.core.Trip
 import tw.tripshare.core.daysUntil
 import tw.tripshare.core.shortDate
 import tw.tripshare.core.tripBadge
+import tw.tripshare.data.Reporter
 import tw.tripshare.today
+import tw.tripshare.ui.ActionRow
+import tw.tripshare.ui.InkDialog
+import tw.tripshare.ui.RoundAction
 import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.CenterMessage
 import tw.tripshare.ui.InkButton
@@ -32,15 +39,19 @@ fun TripListScreen() {
     val session = LocalSession.current
     val nav = LocalNav.current
     val trips by remember { session.repo.watchMyTrips() }.collectAsState(null)
+    var menu by remember { mutableStateOf(false) }
+    var feedback by remember { mutableStateOf(false) }
     Page(
         title = "我的旅程",
-        actions = { TextAction("用邀請碼加入", { nav.push(Screen.Join) }) },
+        actions = { RoundAction("⋯", { menu = true }) },
         bottom = {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                InkButton("＋ 新旅程", { nav.push(Screen.NewTrip) }, Modifier.fillMaxWidth().then(Modifier))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                InkButton("用邀請碼加入", { nav.push(Screen.Join) }, Modifier.weight(1f), fill = AppColors.paper)
+                InkButton("＋ 新旅程", { nav.push(Screen.NewTrip) }, Modifier.weight(1f))
             }
         },
     ) {
+        InstallBanner()
         val list = trips
         when {
             list == null -> CenterMessage("讀取中…")
@@ -48,6 +59,13 @@ fun TripListScreen() {
             else -> list.forEach { TripCard(it) { nav.push(Screen.TripView(it.id)) } }
         }
     }
+    if (menu) {
+        InkDialog("同遊", { menu = false }, buttons = { TextAction("關閉", { menu = false }) }) {
+            ActionRow("回報問題", "哪裡怪怪的，直接告訴開發者") { menu = false; feedback = true }
+            Txt("版本 ${Reporter.VERSION}", size = 13, color = AppColors.faint)
+        }
+    }
+    if (feedback) FeedbackDialog { feedback = false }
 }
 
 @Composable

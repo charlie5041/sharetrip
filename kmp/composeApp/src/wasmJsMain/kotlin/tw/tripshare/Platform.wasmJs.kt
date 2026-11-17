@@ -57,3 +57,68 @@ actual val firebaseOptions = FirebaseOptions(
 private fun jsOpen(url: String): Unit = js("void window.open(url, '_blank', 'noopener')")
 
 actual fun openUrl(url: String) = jsOpen(url)
+
+private fun jsPlatform(): String = js("""(() => {
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  return 'web-' + (ios ? 'iOS' : ua.includes('Android') ? 'android' : 'desktop');
+})()""")
+
+/** index.html sends errors here once the app is running (before that it shows them on screen). */
+private fun jsOnError(cb: (String, String) -> Unit): Unit = js("{ window.tripshareOnError = (m, s) => cb(String(m), String(s || '')); }")
+
+actual fun platformName(): String = jsPlatform()
+
+actual fun installCrashHook(onError: (String, String?) -> Unit) = jsOnError { m, s -> onError(m, s.ifEmpty { null }) }
+
+private fun jsStandalone(): Boolean =
+    js("window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true")
+
+private fun jsAndroid(): Boolean = js("navigator.userAgent.includes('Android')")
+
+private fun jsInApp(): String = js("""(() => {
+  const ua = navigator.userAgent;
+  return ua.includes(' Line/') ? 'LINE' : /FBAN|FBAV|FB_IAB/.test(ua) ? 'Facebook'
+    : ua.includes('Instagram') ? 'Instagram' : ua.includes('MicroMessenger') ? '微信' : '';
+})()""")
+
+private fun jsCanPrompt(): Boolean = js("!!window.tripshareInstall")
+
+private fun jsPrompt(): Promise<JsBoolean> = js("""(async () => {
+  const e = window.tripshareInstall;
+  if (!e) return false;
+  await e.prompt();
+  const c = await e.userChoice;
+  return c.outcome === 'accepted';
+})().catch(() => false)""")
+
+private fun jsOrigin(): String = js("location.origin + '/'")
+
+private fun jsOpenExternal(): Unit = js("""{
+  const u = new URL(location.href);
+  u.searchParams.set('openExternalBrowser', '1');
+  location.href = u.toString();
+}""")
+
+private fun jsLoadFlag(key: String): Boolean = js("(() => { try { return localStorage.getItem(key) === '1'; } catch (_) { return false; } })()")
+
+private fun jsSaveFlag(key: String, value: Boolean): Unit = js("{ try { localStorage.setItem(key, value ? '1' : '0'); } catch (_) {} }")
+
+actual fun installEnv(): InstallEnv? {
+    val p = jsPlatform()
+    return InstallEnv(
+        standalone = jsStandalone(),
+        platform = if (p == "web-iOS") "ios" else if (jsAndroid()) "android" else "other",
+        inAppBrowser = jsInApp().ifEmpty { null },
+        canPrompt = jsCanPrompt(),
+        link = jsOrigin(),
+    )
+}
+
+actual suspend fun promptInstall(): Boolean = runCatching { jsPrompt().await<JsBoolean>().toBoolean() }.getOrDefault(false)
+
+actual fun openInExternalBrowser() = jsOpenExternal()
+
+actual fun loadFlag(key: String): Boolean = jsLoadFlag(key)
+
+actual fun saveFlag(key: String, value: Boolean) = jsSaveFlag(key, value)

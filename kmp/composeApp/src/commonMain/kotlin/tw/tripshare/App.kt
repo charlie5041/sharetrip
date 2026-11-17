@@ -40,13 +40,28 @@ import tw.tripshare.ui.Navigator
 import tw.tripshare.ui.Page
 import tw.tripshare.ui.Screen
 import tw.tripshare.ui.Toasts
+import tw.tripshare.data.Reporter
+import dev.gitlive.firebase.firestore.LocalCacheSettings
+import dev.gitlive.firebase.firestore.firestoreSettings
+import kotlinx.coroutines.CoroutineExceptionHandler
 
 private var firebaseStarted = false
 
 /** Starts Firebase and signs in anonymously (or restores this device's account). */
 private suspend fun startSession(): Session {
     if (!firebaseStarted) {
+        installCrashHook(Reporter::recordError)
         Firebase.initialize(platformContext(), firebaseOptions)
+        // Keeps trips on the phone, so the app opens and records offline.
+        // Android does this by default; the web needs to be told, before
+        // the first read.
+        if (isWeb) {
+            runCatching {
+                Firebase.firestore.settings = firestoreSettings {
+                    cacheSettings = LocalCacheSettings.Persistent.newBuilder().build()
+                }
+            }.onFailure { Reporter.recordError("persistence: $it", null) }
+        }
         firebaseStarted = true
     }
     val auth = Firebase.auth
@@ -58,7 +73,10 @@ private suspend fun startSession(): Session {
         if (saved == null) auth.signInAnonymously()
     }
     val uid = auth.currentUser!!.uid
-    return Session(TripRepository(Firebase.firestore, uid), CoroutineScope(SupervisorJob()))
+    val crashes = CoroutineExceptionHandler { _, e -> Reporter.recordError(e.toString(), e.stackTraceToString()) }
+    val background = CoroutineScope(SupervisorJob() + crashes)
+    Reporter.attach(Firebase.firestore, uid, background)
+    return Session(TripRepository(Firebase.firestore, uid), background)
 }
 
 @Composable
