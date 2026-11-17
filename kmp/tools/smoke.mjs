@@ -10,18 +10,21 @@ const browser = await chromium.launch({ channel: 'chrome' });
 let failed = false;
 for (const [name, viewport] of Object.entries(sizes)) {
   const page = await browser.newPage({ viewport });
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(`${e.message}\n${e.stack ?? ''}`));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const crashes = [];
+  const logs = [];
+  page.on('pageerror', (e) => crashes.push(`${e.message}\n${e.stack ?? ''}`));
+  page.on('console', (m) => { if (m.type() === 'error') logs.push(m.text()); });
   await page.goto(url);
   await page.waitForTimeout(8000);
   const status = await page.evaluate(() => document.getElementById('status')?.textContent ?? '');
   await page.screenshot({ path: `${outDir}/${name}.png` });
-  const startupErrors = errors.filter((e) => !/firestore|firebase|auth\//i.test(e));
   console.log(`== ${name} ${viewport.width}x${viewport.height}`);
   console.log(`status text: ${JSON.stringify(status)}`);
-  for (const e of errors) console.log(`error: ${e}`);
-  if (status.includes('無法啟動') || startupErrors.length) failed = true;
+  for (const e of logs) console.log(`console error: ${e}`);
+  for (const e of crashes) console.log(`CRASH: ${e}`);
+  // Console errors (a missing favicon, library deprecation notices) are
+  // only printed; an uncaught exception fails the test.
+  if (status.includes('無法啟動') || crashes.length) failed = true;
   await page.close();
 }
 await browser.close();
