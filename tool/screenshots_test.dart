@@ -47,7 +47,7 @@ void main() {
         startDate: d(34),
         endDate: d(38),
         nickname: '小明');
-    await repo.addNameOnlyMember(id, '阿華');
+    await repo.addMember(id, '阿華');
     final members = await repo.watchMembers(id).first;
     await repo.saveFlight(
         id,

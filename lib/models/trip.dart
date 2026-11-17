@@ -58,16 +58,11 @@ class Member {
     required this.order,
     required this.joinedAt,
     this.uid,
-    this.relinkedAt,
   });
 
   final String id;
   final String name;
   final String? uid;
-
-  /// When someone last took over this member from another device, after
-  /// the original sign-in was lost. Shown so that a takeover is visible.
-  final int? relinkedAt;
 
   /// Display order, which also decides who absorbs rounding remainders.
   final int order;
@@ -78,7 +73,6 @@ class Member {
         'uid': uid,
         'order': order,
         'joinedAt': joinedAt,
-        if (relinkedAt != null) 'relinkedAt': relinkedAt,
       };
 
   factory Member.fromMap(String id, Map<String, dynamic> m) => Member(
@@ -87,6 +81,5 @@ class Member {
         uid: m['uid'] as String?,
         order: m['order'] as int,
         joinedAt: m['joinedAt'] as int,
-        relinkedAt: m['relinkedAt'] as int?,
       );
 }

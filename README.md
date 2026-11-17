@@ -63,4 +63,4 @@ GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Act
 
 - 網址：https://tripshare-f6209.web.app 。用 Safari 打開，分享 →「加入主畫面」。
 - 身分備份：旅程列表右上角的盾牌可以綁定 Google 帳號。網頁資料被清掉或換手機時，在第一個畫面用 Google 找回。需要在 Firebase Console → Authentication → Sign-in method 啟用 Google。
-- 沒綁 Google 又不見身分的人：請團員產生邀請碼重新加入，再到成員頁點自己原本的名字 →「這是我」。
+- 沒綁 Google 又不見身分的人：請群主在成員頁點他的名字 →「解除綁定」，他再用新的邀請碼加入、選回原本的名字。

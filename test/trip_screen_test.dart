@@ -21,7 +21,7 @@ void main() {
       endDate: '2026-12-24',
       nickname: '小明',
     );
-    await repo.addNameOnlyMember(id, '阿華');
+    await repo.addMember(id, '阿華');
     final members = await repo.watchMembers(id).first;
     await repo.saveExpense(
       id,

@@ -74,5 +74,29 @@ void writeInBackground(BuildContext context, Future<void> write) {
   });
 }
 
+/// Asks before a step that cannot be undone, or that changes things for
+/// other people.
+Future<bool> confirmAction(BuildContext context,
+    {required String title,
+    required String body,
+    required String confirm}) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(body),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消')),
+        FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirm)),
+      ],
+    ),
+  );
+  return ok ?? false;
+}
+
 bool reduceMotion(BuildContext context) =>
     MediaQuery.maybeDisableAnimationsOf(context) ?? false;

@@ -12,8 +12,14 @@ import {
   Timestamp,
   arrayUnion,
   doc,
+  arrayRemove,
+  collection,
+  deleteDoc,
   getDoc,
+  getDocs,
+  query,
   setDoc,
+  where,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
@@ -82,6 +88,63 @@ describe('trips', () => {
     await assertFails(
       updateDoc(doc(db('bob'), 'trips/t1'), { memberUids: ['bob'] }));
   });
+
+  test('the creator sets up the member list with the trip', async () => {
+    const f = db('alice');
+    const b = writeBatch(f);
+    b.set(doc(f, 'trips/t1'), trip('alice'));
+    b.set(doc(f, 'trips/t1/members/alice'), { name: 'A', uid: 'alice', order: 0, joinedAt: 1 });
+    b.set(doc(f, 'trips/t1/members/p1'), { name: 'B', uid: null, order: 1, joinedAt: 1 });
+    await assertSucceeds(b.commit());
+  });
+
+  test('only the owner changes who is in, and stays in', async () => {
+    await seedTrip(['alice', 'bob', 'carol']);
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1'),
+      { memberUids: arrayRemove('carol') }));
+    await assertSucceeds(updateDoc(doc(db('alice'), 'trips/t1'),
+      { memberUids: arrayRemove('carol') }));
+    await assertFails(updateDoc(doc(db('alice'), 'trips/t1'),
+      { memberUids: arrayRemove('alice') }));
+  });
+
+  test('only the owner dissolves the trip', async () => {
+    await seedTrip(['alice', 'bob']);
+    await assertFails(deleteDoc(doc(db('bob'), 'trips/t1')));
+    await assertSucceeds(deleteDoc(doc(db('alice'), 'trips/t1')));
+  });
+});
+
+describe('the member list', () => {
+  beforeEach(async () => {
+    await seedTrip(['alice', 'bob']);
+    await seed((f) => setDoc(doc(f, 'trips/t1/members/p1'),
+      { name: '阿嬤', uid: null, order: 2, joinedAt: 1 }));
+  });
+
+  test('only the owner adds and removes members', async () => {
+    const add = { name: 'C', uid: null, order: 3, joinedAt: 1 };
+    await assertFails(setDoc(doc(db('bob'), 'trips/t1/members/p2'), add));
+    await assertSucceeds(setDoc(doc(db('alice'), 'trips/t1/members/p2'), add));
+    await assertFails(deleteDoc(doc(db('bob'), 'trips/t1/members/p1')));
+    await assertSucceeds(deleteDoc(doc(db('alice'), 'trips/t1/members/p1')));
+  });
+
+  test('members rename only themselves; the owner renames anyone', async () => {
+    await assertSucceeds(updateDoc(doc(db('bob'), 'trips/t1/members/bob'), { name: 'B' }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/p1'), { name: 'X' }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/bob'), { uid: null }));
+    await assertSucceeds(updateDoc(doc(db('alice'), 'trips/t1/members/p1'), { name: '奶奶' }));
+  });
+
+  test('the owner frees a place but cannot hand it to someone', async () => {
+    await assertSucceeds(updateDoc(doc(db('alice'), 'trips/t1/members/bob'), { uid: null }));
+    await assertFails(updateDoc(doc(db('alice'), 'trips/t1/members/p1'), { uid: 'mallory' }));
+  });
+
+  test('members cannot take an open place for themselves', async () => {
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/p1'), { uid: 'bob' }));
+  });
 });
 
 describe('joining with an invite', () => {
@@ -90,39 +153,67 @@ describe('joining with an invite', () => {
       { tripId, expiresAt: inHours(hours), createdBy: 'alice' }));
   }
 
-  function join(uid) {
+  async function seedTripWithPlace() {
+    await seedTrip();
+    await seed((f) => setDoc(doc(f, 'trips/t1/members/p1'),
+      { name: 'Bob', uid: null, order: 1, joinedAt: 1 }));
+  }
+
+  function join(uid, place = 'p1') {
     const f = db(uid);
     const b = writeBatch(f);
     b.update(doc(f, 'trips/t1'), { memberUids: arrayUnion(uid) });
-    b.set(doc(f, `trips/t1/members/${uid}`),
-      { name: uid, uid, order: 9, joinedAt: 1 });
+    b.update(doc(f, `trips/t1/members/${place}`), { uid, joinedAt: 2 });
     return b.commit();
   }
 
-  test('a valid invite lets someone join', async () => {
-    await seedTrip();
+  const openPlaces = (uid) => getDocs(query(
+    collection(db(uid), 'trips/t1/members'), where('uid', '==', null)));
+
+  test('a valid invite lets someone see open places and take one', async () => {
+    await seedTripWithPlace();
     await inviteFor('t1', 24);
     await assertSucceeds(getDoc(doc(db('bob'), 'invites/ABCD2345')));
+    await assertFails(openPlaces('bob'));
     await setDoc(doc(db('bob'), 'users/bob'), { joinCode: 'ABCD2345' });
+    await assertSucceeds(openPlaces('bob'));
     await assertSucceeds(join('bob'));
     await assertSucceeds(getDoc(doc(db('bob'), 'trips/t1')));
   });
 
+  test('a taken place cannot be taken again', async () => {
+    await seedTripWithPlace();
+    await inviteFor('t1', 24);
+    await setDoc(doc(db('carol'), 'users/carol'), { joinCode: 'ABCD2345' });
+    await assertFails(join('carol', 'alice'));
+  });
+
+  test('joining without taking a place is refused', async () => {
+    await seedTripWithPlace();
+    await inviteFor('t1', 24);
+    await setDoc(doc(db('bob'), 'users/bob'), { joinCode: 'ABCD2345' });
+    const f = db('bob');
+    const b = writeBatch(f);
+    b.set(doc(f, 'trips/t1/members/bob'), { name: 'bob', uid: 'bob', order: 9, joinedAt: 1 });
+    b.update(doc(f, 'trips/t1'), { memberUids: arrayUnion('bob') });
+    await assertFails(b.commit());
+  });
+
   test('no invite code, no join', async () => {
-    await seedTrip();
+    await seedTripWithPlace();
     await setDoc(doc(db('bob'), 'users/bob'), { nickname: 'bob' });
     await assertFails(join('bob'));
   });
 
   test('an expired invite is refused', async () => {
-    await seedTrip();
+    await seedTripWithPlace();
     await inviteFor('t1', -1);
     await setDoc(doc(db('bob'), 'users/bob'), { joinCode: 'ABCD2345' });
     await assertFails(join('bob'));
   });
 
   test('an invite for another trip is refused', async () => {
-    await seedTrip();
+    await seedTripWithPlace();
     await inviteFor('other', 24);
     await setDoc(doc(db('bob'), 'users/bob'), { joinCode: 'ABCD2345' });
     await assertFails(join('bob'));
@@ -148,8 +239,9 @@ describe('joining with an invite', () => {
 });
 
 describe('inside a trip', () => {
+  // Members have rules of their own, under 'the member list'.
   for (const sub of ['expenses', 'settlements', 'items', 'checklist',
-                     'flights', 'lodgings', 'members']) {
+                     'flights', 'lodgings']) {
     test(`members read and write ${sub}; others cannot`, async () => {
       await seedTrip(['alice']);
       await assertSucceeds(setDoc(doc(db('alice'), `trips/t1/${sub}/x`), { a: 1 }));
@@ -162,26 +254,6 @@ describe('inside a trip', () => {
   test('unknown collections stay closed', async () => {
     await seedTrip(['alice']);
     await assertFails(setDoc(doc(db('alice'), 'trips/t1/secrets/x'), { a: 1 }));
-  });
-
-  test('a member can claim a name-only member', async () => {
-    await seedTrip(['alice', 'bob']);
-    await seed((f) => setDoc(doc(f, 'trips/t1/members/grandma'),
-      { name: '阿嬤', uid: null, order: 2, joinedAt: 1 }));
-    const f = db('bob');
-    const b = writeBatch(f);
-    b.update(doc(f, 'trips/t1/members/grandma'), { uid: 'bob' });
-    b.delete(doc(f, 'trips/t1/members/bob'));
-    await assertSucceeds(b.commit());
-  });
-
-  test('a member who lost their sign-in can take their member back', async () => {
-    await seedTrip(['alice', 'bob', 'bob2']);
-    const f = db('bob2');
-    const b = writeBatch(f);
-    b.update(doc(f, 'trips/t1/members/bob'), { uid: 'bob2', relinkedAt: 2 });
-    b.delete(doc(f, 'trips/t1/members/bob2'));
-    await assertSucceeds(b.commit());
   });
 });
 

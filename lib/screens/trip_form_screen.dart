@@ -16,6 +16,8 @@ class TripFormScreen extends StatefulWidget {
 
 class _TripFormScreenState extends State<TripFormScreen> {
   final _name = TextEditingController();
+  final _friend = TextEditingController();
+  final _friends = <String>[];
   String _currency = 'TWD';
   DateTimeRange? _range;
   bool _saving = false;
@@ -23,6 +25,7 @@ class _TripFormScreenState extends State<TripFormScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _friend.dispose();
     super.dispose();
   }
 
@@ -53,10 +56,20 @@ class _TripFormScreenState extends State<TripFormScreen> {
           startDate: ymd(_range!.start),
           endDate: ymd(_range!.end),
           nickname: widget.nickname,
+          others: [..._friends, if (_friend.text.trim().isNotEmpty) _friend.text],
         ),
     );
     nav.pushReplacement(
         MaterialPageRoute(builder: (_) => TripScreen(tripId: id)));
+  }
+
+  void _addFriend() {
+    final n = _friend.text.trim();
+    if (n.isEmpty) return;
+    setState(() {
+      _friends.add(n);
+      _friend.clear();
+    });
   }
 
   @override
@@ -90,6 +103,42 @@ class _TripFormScreenState extends State<TripFormScreen> {
                 DropdownMenuItem(value: c.code, child: Text('${c.name} ${c.code}')),
             ],
             onChanged: (v) => setState(() => _currency = v!),
+          ),
+          const SizedBox(height: 24),
+          Text('成員名單', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text('朋友用邀請碼加入時，要從這份名單選自己的名字。之後只有你能增減成員。'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(label: Text('${widget.nickname}（我）')),
+              for (final (i, n) in _friends.indexed)
+                InputChip(
+                  label: Text(n),
+                  onDeleted: () => setState(() => _friends.removeAt(i)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _friend,
+                  maxLength: 20,
+                  decoration: const InputDecoration(labelText: '朋友的名字'),
+                  onSubmitted: (_) => _addFriend(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                tooltip: '加進名單',
+                onPressed: _addFriend,
+                icon: const Icon(Icons.add),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           FilledButton(

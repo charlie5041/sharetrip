@@ -5,6 +5,7 @@ import '../main.dart';
 import '../models/trip.dart';
 import '../services/trip_repository.dart';
 import '../theme.dart';
+import '../widgets/ui.dart';
 import 'trip_screen.dart';
 
 class MembersTab extends StatelessWidget {
@@ -44,57 +45,92 @@ class MembersTab extends StatelessWidget {
     );
   }
 
-  Future<void> _addNameOnly(BuildContext context) async {
-    final name = await _askName(context, title: '加入沒有 app 的成員');
+  bool get _isOwner => data.trip.ownerUid == data.myUid;
+
+  Future<void> _add(BuildContext context) async {
+    final name = await _askName(context, title: '加入成員');
     if (name == null || !context.mounted) return;
-    await AppScope.of(context).repo.addNameOnlyMember(data.trip.id, name);
+    writeInBackground(
+        context, AppScope.of(context).repo.addMember(data.trip.id, name));
   }
 
   Future<void> _tap(BuildContext context, Member m) async {
     final repo = AppScope.of(context).repo;
-    final me = data.me;
-    final canClaim = me != null && m.id != me.id;
-    final relink = m.uid != null;
+    final isMe = m.uid != null && m.uid == data.myUid;
+    final canRename = _isOwner || isMe;
+    final canRemove = _isOwner && !isMe;
+    final canUnbind = _isOwner && !isMe && m.uid != null;
+    if (!canRename && !canRemove) return;
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('改名字'),
-              onTap: () => Navigator.pop(ctx, 'rename'),
-            ),
-            if (canClaim)
+            if (canRename)
               ListTile(
-                leading: const Icon(Icons.how_to_reg),
-                title: const Text('這是我'),
-                subtitle: Text(relink
-                    ? '換了手機或資料不見時用：把這個名字接回這台裝置'
-                    : '把這個名字的帳都算到你身上'),
-                onTap: () => Navigator.pop(ctx, 'claim'),
+                leading: const Icon(Icons.edit),
+                title: const Text('改名字'),
+                onTap: () => Navigator.pop(ctx, 'rename'),
+              ),
+            if (canUnbind)
+              ListTile(
+                leading: const Icon(Icons.phonelink_erase),
+                title: const Text('解除綁定'),
+                subtitle: const Text('他換手機或資料不見時用：名字和帳都留著，'
+                    '他再用邀請碼加入、選回這個名字就好'),
+                onTap: () => Navigator.pop(ctx, 'unbind'),
+              ),
+            if (canRemove)
+              ListTile(
+                leading: const Icon(Icons.person_remove_outlined),
+                title: const Text('移除成員'),
+                onTap: () => Navigator.pop(ctx, 'remove'),
               ),
           ],
         ),
       ),
     );
     if (!context.mounted) return;
-    if (action == 'rename') {
-      final name = await _askName(context, title: '改名字', initial: m.name);
-      if (name != null) await repo.renameMember(data.trip.id, m.id, name);
-    } else if (action == 'claim') {
-      if (relink && !await _confirmRelink(context, m.name)) return;
-      if (!context.mounted) return;
-      try {
-        await repo.claimMember(data.trip.id, m.id, me!.id);
-      } on StateError catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(e.message)));
-        }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      switch (action) {
+        case 'rename':
+          final name = await _askName(context, title: '改名字', initial: m.name);
+          if (name != null) await repo.renameMember(data.trip.id, m.id, name);
+        case 'unbind':
+          if (await confirmAction(context,
+              title: '解除「${m.name}」的綁定？',
+              body: '他目前的手機會看不到這趟旅程。名字和帳都會留著，'
+                  '他用新的邀請碼加入、選「${m.name}」就能接回來。',
+              confirm: '解除綁定')) {
+            await repo.unbindMember(data.trip.id, m);
+          }
+        case 'remove':
+          if (await confirmAction(context,
+              title: '移除「${m.name}」？',
+              body: m.uid == null
+                  ? '名單上不會再有這個名字。'
+                  : '他會看不到這趟旅程，名單上也不會再有這個名字。',
+              confirm: '移除')) {
+            await repo.removeMember(data.trip.id, m);
+          }
       }
+    } on StateError catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     }
+  }
+
+  Future<void> _dissolve(BuildContext context) async {
+    final repo = AppScope.of(context).repo;
+    final nav = Navigator.of(context);
+    final ok = await confirmAction(context,
+        title: '解散「${data.trip.name}」？',
+        body: '所有人的行程、記帳、清單都會一起刪除，無法復原。',
+        confirm: '解散');
+    if (!ok) return;
+    nav.popUntil((r) => r.isFirst);
+    await repo.dissolveTrip(data.trip.id);
   }
 
   @override
@@ -114,9 +150,9 @@ class MembersTab extends StatelessWidget {
               ),
               title: Text(m.uid == data.myUid ? '${m.name}（我）' : m.name),
               subtitle: m.uid == null
-                  ? const Text('沒有 app')
-                  : m.relinkedAt != null
-                      ? Text('${_md(m.relinkedAt!)} 從新裝置重新連結')
+                  ? const Text('還沒加入')
+                  : m.uid == data.trip.ownerUid
+                      ? const Text('群主')
                       : null,
             ),
           ),
@@ -130,45 +166,34 @@ class MembersTab extends StatelessWidget {
                 icon: const Icon(Icons.qr_code),
                 label: const Text('產生邀請碼'),
               ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => _addNameOnly(context),
-                icon: const Icon(Icons.person_add_alt),
-                label: const Text('加入沒有 app 的成員'),
+              const SizedBox(height: 8),
+              Text(
+                _isOwner
+                    ? '朋友加入時，要從「還沒加入」的名字裡選自己。名單上沒有的人進不來，請先加進名單。'
+                    : '名單由群主管理。要加人或刪人，請找群主。',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (_isOwner) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => _add(context),
+                  icon: const Icon(Icons.person_add_alt),
+                  label: const Text('加入成員'),
+                ),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () => _dissolve(context),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error),
+                  child: const Text('解散旅程'),
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
   }
-}
-
-String _md(int ms) {
-  final d = DateTime.fromMillisecondsSinceEpoch(ms);
-  return '${d.month}/${d.day}';
-}
-
-Future<bool> _confirmRelink(BuildContext context, String name) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text('你是「$name」嗎？'),
-      content: Text(
-          '只有在換了手機、刪掉 app，或網頁資料不見時才需要這樣做。'
-          '確定後，「$name」的帳會接到這台裝置，原本的裝置就不再代表這個名字。'
-          '其他人會在成員頁看到這次重新連結。'),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消')),
-        FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('是我，接回來')),
-      ],
-    ),
-  );
-  return ok ?? false;
 }
 
 Future<String?> _askName(BuildContext context,
