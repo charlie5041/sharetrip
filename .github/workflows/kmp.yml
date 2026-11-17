@@ -45,7 +45,7 @@ jobs:
             echo '```'
             (cd $web && find . -type f -printf '%s\t%p\n' | sort -rn | head -15)
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: kotlin-android-apk
@@ -121,4 +121,4 @@ jobs:
             echo '```'
             (cd $web && find . -type f -printf '%s\t%p\n' | sort -rn | head -15)
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
