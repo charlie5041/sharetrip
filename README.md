@@ -27,9 +27,10 @@ cd test/rules && npm install && npm test
 1. 跑 `flutter analyze`、`flutter test` 和規則測試。
 2. 部署 `firestore.rules`（只要推上 `main` 就會部署，不需要改版號）。
 3. 建 Android APK，發給 App Distribution 群組 `friends_android`。
-4. 在家裡的 Mac（self-hosted runner）建 iOS 開發簽章版，發給群組 `friends_ios`。這一步預設關閉，runner 和 iOS 憑證設好後，在 repo 的 Variables 加 `IOS_DISTRIBUTION` = `true` 才會執行。
+4. 建網頁版，部署到 https://tripshare-f6209.web.app（iPhone 朋友用 Safari「加入主畫面」使用）。
+5. 在家裡的 Mac（self-hosted runner）建 iOS 開發簽章版，發給群組 `friends_ios`。這一步預設關閉，runner 和 iOS 憑證設好後，在 repo 的 Variables 加 `IOS_DISTRIBUTION` = `true` 才會執行。
 
-沒改版號只想重發，可以在 Actions 頁籤手動執行 CI（`workflow_dispatch`，可選 both / ios / android）。
+沒改版號只想重發，可以在 Actions 頁籤手動執行 CI（`workflow_dispatch`，可選 both / ios / android / web）。
 
 ### 一次性設定
 
@@ -39,7 +40,7 @@ GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Act
 
 | Secret | 內容 |
 |---|---|
-| `FIREBASE_SERVICE_ACCOUNT` | `tripshare-f6209` 的服務帳戶 JSON 金鑰，角色：Firebase App Distribution Admin、Firebase Rules Admin、Service Usage Viewer |
+| `FIREBASE_SERVICE_ACCOUNT` | `tripshare-f6209` 的服務帳戶 JSON 金鑰，角色：Firebase App Distribution Admin、Firebase Rules Admin、Firebase Hosting Admin、Service Usage Viewer |
 | `ANDROID_KEYSTORE_BASE64` | release keystore 檔案，`base64 -i upload.jks` 的結果 |
 | `ANDROID_KEYSTORE_PASSWORD` | keystore 密碼 |
 | `ANDROID_KEY_ALIAS` | 金鑰別名（例如 `upload`） |
@@ -57,3 +58,9 @@ GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Act
 4. **self-hosted runner**：抱寶的 runner 只綁抱寶的 repo，sharetrip 要另外註冊一個。repo Settings → Actions → Runners → New self-hosted runner → macOS，照畫面指令在 Mac 上裝在另一個資料夾（例如 `~/actions-runner-sharetrip`），預設標籤 `self-hosted, macOS` 即可。Mac 不能睡眠，否則 iOS 那一步會一直排隊。
 5. **iOS 憑證**：用抱寶同一張 Apple Development 憑證（team V885M744V2），從「鑰匙圈存取」匯出成 .p12，`base64 -i dev.p12 | pbcopy` 貼進 `IOS_SIGNING_P12`。
 6. **朋友的 iPhone**：開發簽章版只能裝在登記過的裝置上。朋友先從 App Distribution 的邀請信註冊裝置，Firebase Console 會列出 UDID；把 UDID 加到 Apple Developer → Devices，再重發一次（Xcode 自動簽章會把新裝置放進描述檔）。
+
+### 網頁版（iPhone）
+
+- 網址：https://tripshare-f6209.web.app 。用 Safari 打開，分享 →「加入主畫面」。
+- 身分備份：旅程列表右上角的盾牌可以綁定 Google 帳號。網頁資料被清掉或換手機時，在第一個畫面用 Google 找回。需要在 Firebase Console → Authentication → Sign-in method 啟用 Google。
+- 沒綁 Google 又不見身分的人：請團員產生邀請碼重新加入，再到成員頁點自己原本的名字 →「這是我」。
