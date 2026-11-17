@@ -115,5 +115,17 @@ ThemeData buildAppTheme() {
       ),
     ),
     dividerTheme: const DividerThemeData(color: AppColors.ink, thickness: 2),
+    tabBarTheme: const TabBarThemeData(
+      labelColor: AppColors.ink,
+      unselectedLabelColor: AppColors.ink,
+      indicatorColor: AppColors.coral,
+      indicatorSize: TabBarIndicatorSize.label,
+      dividerColor: AppColors.ink,
+    ),
+    navigationBarTheme: const NavigationBarThemeData(
+      backgroundColor: AppColors.paper,
+      indicatorColor: AppColors.mizu,
+      elevation: 0,
+    ),
   );
 }
