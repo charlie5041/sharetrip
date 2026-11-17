@@ -5,8 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#FFFCF6">
   <title>同遊 Kotlin 原型</title>
-  <style>html,body{margin:0;height:100%;background:#FFFCF6;overflow:hidden}</style>
-  <script type="application/javascript" src="tripshare.js"></script>
+  <style>
+    html,body{margin:0;height:100%;background:#FFFCF6;color:#3E3A39;overflow:hidden;font-family:system-ui,sans-serif}
+    #status{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;white-space:pre-wrap}
+  </style>
 </head>
-<body></body>
+<body>
+  <div id="status">載入中…</div>
+  <script>
+    // Shown instead of a blank page when the app can't start (for example
+    // a browser without WebAssembly GC), so a tester can tell us why.
+    function showError(msg) {
+      var s = document.getElementById('status');
+      if (s) s.textContent = '無法啟動：\n' + msg + '\n\n' + navigator.userAgent;
+    }
+    window.addEventListener('error', function (e) { showError(e.message || String(e.error)); });
+    window.addEventListener('unhandledrejection', function (e) { showError(String(e.reason && (e.reason.stack || e.reason))); });
+  </script>
+  <script src="tripshare.js" defer></script>
+</body>
 </html>
