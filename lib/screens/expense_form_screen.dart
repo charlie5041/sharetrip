@@ -158,6 +158,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final e = _build();
     if (e == null) return;
     setState(() => _saving = true);
