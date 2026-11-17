@@ -62,5 +62,6 @@ GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Act
 ### 網頁版（iPhone）
 
 - 網址：https://tripshare-f6209.web.app 。用 Safari 打開，分享 →「加入主畫面」。
+- 離線：`web/sw.js` 把整個 app 存在手機裡，打開過一次之後沒網路也能開。手動部署時，`flutter build web --release` 之後要先跑 `node tool/web_offline.mjs`，再 `firebase deploy --only hosting`。
 - 身分備份：旅程列表右上角的盾牌可以綁定 Google 帳號。網頁資料被清掉或換手機時，在第一個畫面用 Google 找回。需要在 Firebase Console → Authentication → Sign-in method 啟用 Google。
 - 沒綁 Google 又不見身分的人：請團員產生邀請碼重新加入，再到成員頁點自己原本的名字 →「這是我」。

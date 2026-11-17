@@ -89,7 +89,7 @@ String accountErrorText(Object e) {
       case 'network-request-failed':
         return '網路不通，請稍後再試';
     }
-    return 'Google 登入失敗（${e.code}）';
+    return 'Google 登入失敗（${e.code}${e.message == null ? '' : '：${e.message}'}）';
   }
-  return 'Google 登入失敗';
+  return 'Google 登入失敗（$e）';
 }
