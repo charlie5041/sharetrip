@@ -10,7 +10,12 @@ import tw.tripshare.data.TripRepository
  * writes that must outlive the screen that started them: offline, a write
  * only completes once the device is back online.
  */
-class Session(val repo: TripRepository, val background: CoroutineScope) {
+class Session(
+    val repo: TripRepository,
+    val background: CoroutineScope,
+    /** Starts over as whoever is signed in now, e.g. after switching to a Google-backed identity. */
+    val restart: () -> Unit,
+) {
     val rates = ExchangeRates()
 }
 

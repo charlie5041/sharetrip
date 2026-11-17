@@ -48,7 +48,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 private var firebaseStarted = false
 
 /** Starts Firebase and signs in anonymously (or restores this device's account). */
-private suspend fun startSession(): Session {
+private suspend fun startSession(restart: () -> Unit): Session {
     if (!firebaseStarted) {
         installCrashHook(Reporter::recordError)
         Firebase.initialize(platformContext(), firebaseOptions)
@@ -76,7 +76,7 @@ private suspend fun startSession(): Session {
     val crashes = CoroutineExceptionHandler { _, e -> Reporter.recordError(e.toString(), e.stackTraceToString()) }
     val background = CoroutineScope(SupervisorJob() + crashes)
     Reporter.attach(Firebase.firestore, uid, background)
-    return Session(TripRepository(Firebase.firestore, uid), background)
+    return Session(TripRepository(Firebase.firestore, uid), background, restart)
 }
 
 @Composable
@@ -88,7 +88,7 @@ fun App() {
         val toasts = remember { Toasts() }
         LaunchedEffect(attempt) {
             failed = false
-            runCatching { startSession() }.onSuccess { session = it }.onFailure { failed = true }
+            runCatching { startSession(restart = { session = null; attempt++ }) }.onSuccess { session = it }.onFailure { failed = true }
         }
         CompositionLocalProvider(LocalToasts provides toasts) {
             val s = session

@@ -18,6 +18,7 @@ import tw.tripshare.core.Trip
 import tw.tripshare.core.daysUntil
 import tw.tripshare.core.shortDate
 import tw.tripshare.core.tripBadge
+import tw.tripshare.data.Google
 import tw.tripshare.data.Reporter
 import tw.tripshare.today
 import tw.tripshare.ui.ActionRow
@@ -41,6 +42,7 @@ fun TripListScreen() {
     val trips by remember { session.repo.watchMyTrips() }.collectAsState(null)
     var menu by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf(false) }
+    var account by remember { mutableStateOf(false) }
     Page(
         title = "我的旅程",
         actions = { RoundAction("⋯", { menu = true }) },
@@ -55,17 +57,21 @@ fun TripListScreen() {
         val list = trips
         when {
             list == null -> CenterMessage("讀取中…")
-            list.isEmpty() -> CenterMessage("還沒有旅程\n按下面的「新旅程」建立一趟，或用邀請碼加入朋友的旅程")
+            list.isEmpty() -> CenterMessage("還沒有旅程\n按下面的「新旅程」建立一趟，或用邀請碼加入朋友的旅程") {
+                if (Google.linkedEmail() == null) TextAction("以前用過？用 Google 帳號找回我的旅程", { account = true })
+            }
             else -> list.forEach { TripCard(it) { nav.push(Screen.TripView(it.id)) } }
         }
     }
     if (menu) {
         InkDialog("同遊", { menu = false }, buttons = { TextAction("關閉", { menu = false }) }) {
+            ActionRow("備份我的身分", Google.linkedEmail()?.let { "已綁定 Google $it" } ?: "還沒綁定，換手機會找不回旅程") { menu = false; account = true }
             ActionRow("回報問題", "哪裡怪怪的，直接告訴開發者") { menu = false; feedback = true }
             Txt("版本 ${Reporter.VERSION}", size = 13, color = AppColors.faint)
         }
     }
     if (feedback) FeedbackDialog { feedback = false }
+    if (account) AccountDialog { account = false }
 }
 
 @Composable

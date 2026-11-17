@@ -99,3 +99,6 @@ private val prefs get() = appContext.getSharedPreferences("tripshare", Context.M
 actual fun loadFlag(key: String): Boolean = prefs.getBoolean(key, false)
 
 actual fun saveFlag(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()
+
+/** The visible activity, which Android's account picker needs. */
+var currentActivity: java.lang.ref.WeakReference<android.app.Activity>? = null

@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import tw.tripshare.InstallEnv
 import tw.tripshare.copyToClipboard
+import tw.tripshare.data.Google
+import tw.tripshare.data.GoogleResult
 import tw.tripshare.data.Reporter
 import tw.tripshare.installEnv
 import tw.tripshare.loadFlag
@@ -155,4 +157,61 @@ private fun Step(n: Int, text: String) {
 private fun CopyLink(link: String) {
     var copied by remember { mutableStateOf(false) }
     InkButton(if (copied) "已複製 $link" else "複製網址", { copyToClipboard(link); copied = true }, Modifier.fillMaxWidth(), fill = AppColors.paper)
+}
+
+/**
+ * Shows whether this identity is backed up to Google, and lets the person
+ * back it up or switch to an identity they backed up on another device.
+ */
+@Composable
+fun AccountDialog(onDismiss: () -> Unit) {
+    val session = LocalSession.current
+    val toasts = LocalToasts.current
+    val scope = rememberCoroutineScope()
+    var email by remember { mutableStateOf(Google.linkedEmail()) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var inUse by remember { mutableStateOf<GoogleResult.InUse?>(null) }
+
+    // Each start* call opens Google's window right away, inside the tap.
+    fun go(start: () -> (suspend () -> GoogleResult), onOk: () -> Unit) {
+        if (busy) return
+        busy = true
+        error = null
+        val outcome = start()
+        scope.launch {
+            when (val r = outcome()) {
+                GoogleResult.Ok -> onOk()
+                GoogleResult.Cancelled -> {}
+                is GoogleResult.InUse -> inUse = r
+                is GoogleResult.Failed -> error = r.message
+            }
+            busy = false
+        }
+    }
+
+    val switch = { go(Google::startSignIn) { onDismiss(); session.restart() } }
+
+    val pending = inUse
+    if (pending != null) {
+        InkDialog("這個帳號已經綁定過", { inUse = null }, buttons = {
+            TextAction("取消", { inUse = null })
+            InkButton("改用那個身分", { inUse = null; switch() })
+        }) {
+            Txt("${pending.email ?: "這個 Google 帳號"} 已經綁在另一個同遊身分上。要改用那個身分嗎？這台裝置目前的身分（還沒綁定）會被放掉。")
+        }
+        return
+    }
+    InkDialog("備份我的身分", onDismiss, buttons = { TextAction("關閉", onDismiss) }) {
+        if (email != null) {
+            Txt("已綁定 Google：$email\n換手機或資料不見時，用這個 Google 帳號登入就能找回所有旅程。")
+        } else {
+            Txt("目前沒有綁定。換手機、刪掉 app 或網頁資料被清掉時，你會看不到原本的旅程。綁定 Google 後就能找回。")
+            InkButton("綁定 Google 帳號", {
+                go(Google::startLink) { email = Google.linkedEmail(); toasts.show("已綁定，換手機時用 Google 登入就能找回") }
+            }, Modifier.fillMaxWidth(), enabled = !busy)
+            TextAction("我在別的裝置綁定過，改用那個身分", switch)
+        }
+        error?.let { Txt(it, color = AppColors.error) }
+    }
 }

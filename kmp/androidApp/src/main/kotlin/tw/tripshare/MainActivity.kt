@@ -11,6 +11,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         appContext = applicationContext
+        currentActivity = java.lang.ref.WeakReference(this)
         enableEdgeToEdge()
         // Back goes up the app's own screens; at the first screen it closes the app.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
