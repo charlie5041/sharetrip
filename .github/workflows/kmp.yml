@@ -40,10 +40,13 @@ jobs:
             echo "|---|---|"
             echo "| Android APK | $(du -k "$apk" | cut -f1) KB |"
             echo "| 網頁全部檔案 | $(du -sk $web | cut -f1) KB |"
-            echo "| 網頁傳輸（brotli 後） | $(cd $web && for f in $(find . -type f); do brotli -c -q 11 "$f" | wc -c; done | awk '{s+=$1} END {print int(s/1024)}') KB |"
+            echo "| 網頁首次下載（brotli 後，不含 .map） | $(cd $web && for f in $(find . -type f ! -name '*.map' ! -name '*.txt'); do brotli -c -q 11 "$f" | wc -c; done | awk '{s+=$1} END {print int(s/1024)}') KB |"
             echo
             echo '```'
-            (cd $web && find . -type f -printf '%s\t%p\n' | sort -rn | head -15)
+            echo "原始KB  brotliKB  檔案"
+            (cd $web && find . -type f ! -name '*.map' | while read -r f; do
+              printf '%7d %9d  %s\n' $(( $(stat -c%s "$f") / 1024 )) $(( $(brotli -c -q 11 "$f" | wc -c) / 1024 )) "$f"
+            done | sort -rn | head -20)
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
@@ -103,7 +106,6 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build apk --release
-      - run: flutter build apk --release --split-per-abi
       - run: flutter build web --release
       - name: Sizes
         run: |
@@ -114,11 +116,13 @@ jobs:
             echo "| 項目 | 大小 |"
             echo "|---|---|"
             echo "| Android APK（現在發給大家的） | $(du -k build/app/outputs/flutter-apk/app-release.apk | cut -f1) KB |"
-            echo "| Android APK（只含 arm64） | $(du -k build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | cut -f1) KB |"
             echo "| 網頁全部檔案 | $(du -sk $web | cut -f1) KB |"
-            echo "| 網頁傳輸（brotli 後） | $(cd $web && for f in $(find . -type f); do brotli -c -q 11 "$f" | wc -c; done | awk '{s+=$1} END {print int(s/1024)}') KB |"
+            echo "| 網頁首次下載（brotli 後，不含 .map） | $(cd $web && for f in $(find . -type f ! -name '*.map' ! -name '*.txt'); do brotli -c -q 11 "$f" | wc -c; done | awk '{s+=$1} END {print int(s/1024)}') KB |"
             echo
             echo '```'
-            (cd $web && find . -type f -printf '%s\t%p\n' | sort -rn | head -15)
+            echo "原始KB  brotliKB  檔案"
+            (cd $web && find . -type f ! -name '*.map' | while read -r f; do
+              printf '%7d %9d  %s\n' $(( $(stat -c%s "$f") / 1024 )) $(( $(brotli -c -q 11 "$f" | wc -c) / 1024 )) "$f"
+            done | sort -rn | head -20)
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
