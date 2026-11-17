@@ -7,5 +7,7 @@ import kotlinx.browser.document
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     document.getElementById("status")?.remove()
-    ComposeViewport(document.body!!) { App() }
+    // A fixed-size container: inside <body> the page height is unbounded,
+    // which scrolling content can't be measured against.
+    ComposeViewport(document.getElementById("app")!!) { App() }
 }
