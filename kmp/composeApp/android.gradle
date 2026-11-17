@@ -33,7 +33,3 @@ android {
         resources.excludes += ['/META-INF/{AL2.0,LGPL2.1}', 'DebugProbesKt.bin']
     }
 }
-
-kotlin.sourceSets.androidMain.dependencies {
-    implementation 'androidx.activity:activity-compose:1.11.0'
-}

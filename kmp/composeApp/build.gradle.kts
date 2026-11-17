@@ -43,6 +43,11 @@ kotlin {
             implementation("dev.gitlive:firebase-auth:$firebaseVersion")
             implementation("dev.gitlive:firebase-firestore:$firebaseVersion")
         }
+        if (withAndroid) {
+            getByName("androidMain").dependencies {
+                implementation("androidx.activity:activity-compose:1.11.0")
+            }
+        }
     }
 }
 
