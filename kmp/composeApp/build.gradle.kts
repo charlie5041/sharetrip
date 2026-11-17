@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -18,8 +19,8 @@ val firebaseVersion = "3.0.0-beta1"
 
 // The version from version.properties, as a constant the app can show and
 // put in error reports ("0.2.0+11").
-val versionProps = java.util.Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
-val appVersion = "${versionProps["versionName"]}+${versionProps["versionCode"]}"
+val versionProps = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
+val appVersion = "${versionProps.getProperty("versionName")}+${versionProps.getProperty("versionCode")}"
 val generatedVersion = layout.buildDirectory.dir("generated/version")
 val writeVersion by tasks.registering {
     inputs.property("version", appVersion)
