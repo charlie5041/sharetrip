@@ -222,6 +222,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         children: [
           TextField(
             controller: _title,
+            onChanged: (_) => setState(() => _error = null),
             decoration: const InputDecoration(labelText: '項目，例如「一蘭拉麵」'),
           ),
           const SizedBox(height: 12),
@@ -249,7 +250,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: '金額'),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) => setState(() => _error = null),
                 ),
               ),
               const SizedBox(width: 8),
@@ -286,7 +287,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                       )
                     : null,
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => setState(() => _error = null),
             ),
             _ConvertedHint(
                 amount: _amount.text, from: _currency, to: _base, rate: _rate.text),

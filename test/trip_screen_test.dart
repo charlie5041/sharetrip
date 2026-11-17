@@ -59,4 +59,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('大家都結清了 🎉'), findsOneWidget);
   });
+
+  testWidgets('a form error clears as soon as the field is edited',
+      (tester) async {
+    final repo = TripRepository(firestore: FakeFirebaseFirestore(), uid: 'me');
+    final id = await repo.createTrip(
+      name: '大阪',
+      baseCurrency: 'TWD',
+      startDate: '2026-12-20',
+      endDate: '2026-12-24',
+      nickname: '小明',
+    );
+    await tester.pumpWidget(AppScope(
+      repo: repo,
+      rates: ExchangeRates(),
+      child: MaterialApp(theme: buildAppTheme(), home: TripScreen(tripId: id)),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('記一筆'));
+    await tester.pumpAndSettle();
+    final save = find.widgetWithText(FilledButton, '儲存');
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
+    await tester.pump();
+    expect(find.text('請填項目名稱', skipOffstage: false), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, '拉麵');
+    await tester.pump();
+    expect(find.text('請填項目名稱', skipOffstage: false), findsNothing);
+  });
 }
