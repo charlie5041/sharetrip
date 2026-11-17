@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../illustrations/trip_scene.dart';
 import '../models/travel.dart';
 import '../theme.dart';
 import '../widgets/dates.dart';
@@ -61,12 +62,14 @@ class _Hero extends StatelessWidget {
             ? ('旅程已結束', '辛苦了')
             : ('旅行中', '第 ${1 - days} 天');
     return Card(
-      color: AppColors.mizu,
+      color: AppColors.paper,
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            TripScene(tripName: trip.name),
+            const SizedBox(height: 12),
             Text(trip.name, style: text.headlineMedium),
             const SizedBox(height: 4),
             Text('${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}'),
@@ -74,7 +77,7 @@ class _Hero extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.paper,
+                color: AppColors.coral,
                 border: Border.all(color: AppColors.ink, width: 3),
                 borderRadius: BorderRadius.circular(AppShape.radius),
               ),
