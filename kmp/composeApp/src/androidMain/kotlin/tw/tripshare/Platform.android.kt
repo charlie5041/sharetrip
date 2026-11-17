@@ -102,3 +102,7 @@ actual fun saveFlag(key: String, value: Boolean) = prefs.edit().putBoolean(key, 
 
 /** The visible activity, which Android's account picker needs. */
 var currentActivity: java.lang.ref.WeakReference<android.app.Activity>? = null
+
+actual fun prefersReducedMotion(): Boolean = runCatching {
+    android.provider.Settings.Global.getFloat(appContext.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+}.getOrDefault(false)

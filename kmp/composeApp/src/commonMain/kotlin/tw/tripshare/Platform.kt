@@ -67,3 +67,6 @@ expect fun openInExternalBrowser()
 /** A per-device yes/no that survives restarts (localStorage on the web). */
 expect fun loadFlag(key: String): Boolean
 expect fun saveFlag(key: String, value: Boolean)
+
+/** The phone asks apps to keep still (accessibility). */
+expect fun prefersReducedMotion(): Boolean

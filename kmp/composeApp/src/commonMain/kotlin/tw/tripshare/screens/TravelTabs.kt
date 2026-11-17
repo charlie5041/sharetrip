@@ -16,7 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import tw.tripshare.prefersReducedMotion
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.datetime.daysUntil
+import tw.tripshare.art.TripScene
 import tw.tripshare.core.ChecklistKind
 import tw.tripshare.core.Flight
 import tw.tripshare.core.ItineraryItem
@@ -92,6 +99,7 @@ fun OverviewTab(data: TripData) {
     }
     InkCard(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            TripScene(trip.name)
             Txt(trip.name, size = 26, bold = true, align = TextAlign.Center)
             Txt("${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}")
             InkCard(fill = AppColors.coral) {
@@ -176,7 +184,26 @@ fun ItineraryTab(data: TripData) {
         Txt("這天還沒有行程", Modifier.fillMaxWidth().padding(24.dp), align = TextAlign.Center, color = AppColors.faint)
         return
     }
-    Column {
+    // A little bounce when switching days, unless the phone asks for stillness.
+    val pop = remember { Animatable(1f) }
+    val calm = remember { prefersReducedMotion() }
+    var shown by remember { mutableStateOf(day) }
+    LaunchedEffect(day) {
+        if (day != shown && !calm) {
+            pop.snapTo(0f)
+            shown = day
+            pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 320f))
+        }
+        shown = day
+    }
+    Column(
+        Modifier.graphicsLayer {
+            alpha = pop.value.coerceIn(0f, 1f)
+            val s = 0.92f + 0.08f * pop.value
+            scaleX = s
+            scaleY = s
+        },
+    ) {
         items.forEachIndexed { i, item -> TimelineRow(data.trip.id, item, first = i == 0, last = i == items.lastIndex) }
     }
 }

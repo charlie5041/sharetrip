@@ -122,3 +122,7 @@ actual fun openInExternalBrowser() = jsOpenExternal()
 actual fun loadFlag(key: String): Boolean = jsLoadFlag(key)
 
 actual fun saveFlag(key: String, value: Boolean) = jsSaveFlag(key, value)
+
+private fun jsReducedMotion(): Boolean = js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+
+actual fun prefersReducedMotion(): Boolean = jsReducedMotion()
