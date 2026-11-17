@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/expense.dart';
+import '../models/itinerary_item.dart';
+import '../models/travel.dart';
 import '../models/trip.dart';
 
 enum InviteErrorKind { notFound, expired, alreadyMember }
@@ -262,4 +264,80 @@ class TripRepository {
 
   Future<void> deleteSettlement(String tripId, String id) =>
       _settlements(tripId).doc(id).delete();
+
+  // ---- Itinerary, flights, lodging, checklists ---------------------------
+
+  CollectionReference<Map<String, dynamic>> _sub(String tripId, String name) =>
+      _trips.doc(tripId).collection(name);
+
+  Stream<List<ItineraryItem>> watchItems(String tripId) =>
+      _sub(tripId, 'items').snapshots().map((s) =>
+          s.docs.map((d) => ItineraryItem.fromMap(d.id, d.data())).toList()
+            ..sort(ItineraryItem.compare));
+
+  Future<void> saveItem(String tripId, ItineraryItem item) {
+    final data = item.toMap();
+    if (item.id.isEmpty) {
+      data['order'] = _now;
+      return _sub(tripId, 'items').add(data);
+    }
+    return _sub(tripId, 'items').doc(item.id).set(data);
+  }
+
+  Future<void> deleteItem(String tripId, String id) =>
+      _sub(tripId, 'items').doc(id).delete();
+
+  Stream<List<Flight>> watchFlights(String tripId) =>
+      _sub(tripId, 'flights').snapshots().map((s) =>
+          s.docs.map((d) => Flight.fromMap(d.id, d.data())).toList()
+            ..sort((a, b) => a.departKey.compareTo(b.departKey)));
+
+  Future<void> saveFlight(String tripId, Flight f) => f.id.isEmpty
+      ? _sub(tripId, 'flights').add(f.toMap())
+      : _sub(tripId, 'flights').doc(f.id).set(f.toMap());
+
+  Future<void> deleteFlight(String tripId, String id) =>
+      _sub(tripId, 'flights').doc(id).delete();
+
+  Stream<List<Lodging>> watchLodgings(String tripId) =>
+      _sub(tripId, 'lodgings').snapshots().map((s) =>
+          s.docs.map((d) => Lodging.fromMap(d.id, d.data())).toList()
+            ..sort((a, b) => a.checkIn.compareTo(b.checkIn)));
+
+  Future<void> saveLodging(String tripId, Lodging l) => l.id.isEmpty
+      ? _sub(tripId, 'lodgings').add(l.toMap())
+      : _sub(tripId, 'lodgings').doc(l.id).set(l.toMap());
+
+  Future<void> deleteLodging(String tripId, String id) =>
+      _sub(tripId, 'lodgings').doc(id).delete();
+
+  Stream<List<ChecklistEntry>> watchChecklist(String tripId) =>
+      _sub(tripId, 'checklist').snapshots().map((s) =>
+          s.docs.map((d) => ChecklistEntry.fromMap(d.id, d.data())).toList()
+            ..sort((a, b) => a.order.compareTo(b.order)));
+
+  Future<void> addChecklistEntries(
+      String tripId, ChecklistKind kind, List<String> texts) async {
+    final batch = _db.batch();
+    var order = _now;
+    for (final t in texts) {
+      batch.set(_sub(tripId, 'checklist').doc(), {
+        'kind': kind.name,
+        'text': t.trim(),
+        'done': false,
+        'doneBy': null,
+        'order': order++,
+      });
+    }
+    await batch.commit();
+  }
+
+  Future<void> setChecklistDone(
+          String tripId, String id, bool done, String byName) =>
+      _sub(tripId, 'checklist')
+          .doc(id)
+          .update({'done': done, 'doneBy': done ? byName : null});
+
+  Future<void> deleteChecklistEntry(String tripId, String id) =>
+      _sub(tripId, 'checklist').doc(id).delete();
 }

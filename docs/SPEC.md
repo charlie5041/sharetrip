@@ -29,6 +29,14 @@
 - 按天列出項目：時間（可空）、標題、地點、地圖連結、備註；同一天內可拖曳排序。
 - 地點一鍵開啟 Google Maps / Apple 地圖。不嵌入地圖、不自動排路線。
 
+### 首頁、航班、住宿、清單（2026-11-16 加入範圍）
+- 旅程內用底部選單切換：首頁、行程、清單、記帳（支出／結算）、成員。原本參考的網站是「頂端固定選單」，不過手機 app 的慣例是底部選單，單手也比較好按。
+- 首頁：旅程名稱、日期、出發倒數（旅行中顯示「第 N 天」），以及航班卡片和住宿卡片。
+- 航班：航班編號、航空公司、出發／抵達機場代碼與名稱、當地日期時間、備註。時間照機票上的當地時間存成文字，不做時區換算。
+- 住宿：名稱、入住／退房日期（自動算出幾晚）、地址、地圖連結、訂房編號、備註。
+- 行程項目另外有「怎麼去」（步行／電車／巴士／計程車／開車／飛機／船，用彩色小標籤顯示）和「必去」標記。有時間的項目依時間排序，沒時間的排在最後。目前**不支援拖曳排序**。
+- 清單：待辦、出發前、行李三種，大家共用，打勾會顯示是誰勾的；左滑刪除。出發前和行李清單是空的時候，可以一鍵加入常用項目。
+
 ### 發布
 - 照抱寶的方式：改 `pubspec.yaml` 的版本號並推上 `main`，CI 就把 Android APK 和 iOS 開發簽章版發到 Firebase App Distribution。
 - iPhone 朋友要先在 App Tester 註冊裝置，再把 UDID 加進 Apple team。
@@ -92,12 +100,31 @@ trips/{tripId}/settlements/{id}     // 「已轉帳」紀錄
   createdBy: string
 
 trips/{tripId}/items/{itemId}       // 行程
+  transport: string                 // none | walk | train | bus | taxi | car | flight | ferry
+  mustGo: bool
   date: string                      // "2026-12-21"
   time: string?                     // "09:30"
   title: string
   place: string?
   mapUrl: string?
   note: string?
+  order: int
+
+trips/{tripId}/flights/{id}
+  flightNo, airline?, fromCode, fromName?, toCode, toName?: string
+  departDate, departTime: string    // 出發地當地時間
+  arriveDate?, arriveTime?: string  // 抵達地當地時間
+  note?: string
+
+trips/{tripId}/lodgings/{id}
+  name, checkIn, checkOut: string
+  address?, mapUrl?, confirmation?, note?: string
+
+trips/{tripId}/checklist/{id}
+  kind: string                      // todo | predeparture | packing
+  text: string
+  done: bool
+  doneBy: string?                   // 勾選者的名字
   order: int
 
 invites/{code}

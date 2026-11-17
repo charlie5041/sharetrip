@@ -66,7 +66,8 @@ service cloud.firestore {
           && me() in getAfter(/databases/$(database)/documents/trips/$(tripId)).data.memberUids;
       }
       match /{sub}/{docId} {
-        allow read, write: if sub in ['expenses', 'settlements', 'items', 'checklist']
+        allow read, write: if sub in ['expenses', 'settlements', 'items', 'checklist',
+                        'flights', 'lodgings']
           && isMember(tripId);
       }
     }
