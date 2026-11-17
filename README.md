@@ -27,7 +27,7 @@ cd test/rules && npm install && npm test
 1. 跑 `flutter analyze`、`flutter test` 和規則測試。
 2. 部署 `firestore.rules`（只要推上 `main` 就會部署，不需要改版號）。
 3. 建 Android APK，發給 App Distribution 群組 `friends_android`。
-4. 建網頁版，部署到 https://tripshare-f6209.web.app（iPhone 朋友用 Safari「加入主畫面」使用）。
+4. 建網頁版，部署到 https://tripshare-tw.web.app（iPhone 朋友用 Safari「加入主畫面」使用）。
 5. 在家裡的 Mac（self-hosted runner）建 iOS 開發簽章版，發給群組 `friends_ios`。這一步預設關閉，runner 和 iOS 憑證設好後，在 repo 的 Variables 加 `IOS_DISTRIBUTION` = `true` 才會執行。
 
 沒改版號只想重發，可以在 Actions 頁籤手動執行 CI（`workflow_dispatch`，可選 both / ios / android / web）。
@@ -61,7 +61,7 @@ GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Act
 
 ### 網頁版（iPhone）
 
-- 網址：https://tripshare-f6209.web.app 。用 Safari 打開，分享 →「加入主畫面」。
+- 網址：https://tripshare-tw.web.app 。用 Safari 打開，分享 →「加入主畫面」。它是 Firebase 專案裡另外開的 Hosting 網站 `tripshare-tw`，網域也要加在 Authentication → 設定 → 授權網域，Google 登入才會過。舊網址 tripshare-f6209.web.app 會轉到新網址（`firebase.json` 的第二個網站，內容在 `tool/old_site`）。
 - 離線：`web/sw.js` 把整個 app 存在手機裡，打開過一次之後沒網路也能開。手動部署時，`flutter build web --release` 之後要先跑 `node tool/web_offline.mjs`，再 `firebase deploy --only hosting`。
 - 身分備份：旅程列表右上角的盾牌可以綁定 Google 帳號。網頁資料被清掉或換手機時，在第一個畫面用 Google 找回。需要在 Firebase Console → Authentication → Sign-in method 啟用 Google。Android 用系統的 Google 帳號選單，需要把 release 簽章（`upload.jks`）的 SHA-1、SHA-256 加到 Firebase 專案設定的 Android App，否則會出現 `invalid-cert-hash` 或 `clientConfigurationError`。
 - 沒綁 Google 又不見身分的人：請群主在成員頁點他的名字 →「解除綁定」，他再用新的邀請碼加入、選回原本的名字。
