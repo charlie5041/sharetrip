@@ -1,0 +1,11 @@
+abi_version=2.4.0
+builtins_platform=WASM
+compiler_version=2.4.21
+ir_signature_versions=1,2
+jsOutputName=tripshare-core
+language_features=+AllowAnyAsAnActualTypeForExpectInterface +JsAllowImplementingFunctionInterface +MultiPlatformProjects
+metadata_version=2.4.0
+serializedIrFileFingerprints=2780bd7mhjlip.4wwtxnx2hekc 3erz5e718poal.33g3u0i1ngcmf 3fy5gwy91f5x5.220vr8iscqafk 35nn6r7jji2d7.7cgnum0tjn64 3la31nu9zadqd.1t9z8djp9lwul 201cd3b75o48i.2a9g0fjueowtv
+serializedKlibFingerprint=mqary5y2o0jg.17izszk1tnrzz
+unique_name=tripshare\:core
+wasm_targets=wasm-js

@@ -28,7 +28,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew --no-daemon :androidApp:assembleRelease :composeApp:wasmJsBrowserDistribution
+      - run: ./gradlew --no-daemon :core:jvmTest :androidApp:assembleRelease :composeApp:wasmJsBrowserDistribution
       - name: Sizes
         run: |
           command -v brotli >/dev/null || sudo apt-get install -y -qq brotli

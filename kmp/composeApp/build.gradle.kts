@@ -28,6 +28,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core"))
             implementation("org.jetbrains.compose.runtime:runtime:$composeVersion")
             implementation("org.jetbrains.compose.foundation:foundation:$composeVersion")
             implementation("org.jetbrains.compose.ui:ui:$composeVersion")
