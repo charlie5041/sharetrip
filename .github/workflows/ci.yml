@@ -200,7 +200,12 @@ jobs:
   distribute-ios:
     name: Distribute iOS
     needs: [flutter, rules, version]
-    if: needs.version.outputs.changed == 'true' && inputs.platform != 'android'
+    # Off until the sharetrip runner and iOS secrets are set up: without a
+    # runner the job would sit queued for a day. Turn on with the repo
+    # variable IOS_DISTRIBUTION = true.
+    if: >-
+      needs.version.outputs.changed == 'true' && inputs.platform != 'android' &&
+      vars.IOS_DISTRIBUTION == 'true'
     runs-on: [self-hosted, macOS]
     concurrency:
       group: distribute-ios

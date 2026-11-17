@@ -27,11 +27,13 @@ cd test/rules && npm install && npm test
 1. 跑 `flutter analyze`、`flutter test` 和規則測試。
 2. 部署 `firestore.rules`（只要推上 `main` 就會部署，不需要改版號）。
 3. 建 Android APK，發給 App Distribution 群組 `friends`。
-4. 在家裡的 Mac（self-hosted runner）建 iOS 開發簽章版，發給群組 `friends_ios`。
+4. 在家裡的 Mac（self-hosted runner）建 iOS 開發簽章版，發給群組 `friends_ios`。這一步預設關閉，runner 和 iOS 憑證設好後，在 repo 的 Variables 加 `IOS_DISTRIBUTION` = `true` 才會執行。
 
 沒改版號只想重發，可以在 Actions 頁籤手動執行 CI（`workflow_dispatch`，可選 both / ios / android）。
 
 ### 一次性設定
+
+只發 Android 的話，做第 1 到 3 步即可（群組只需要 `friends`）。第 4 到 6 步是 iOS 用的。
 
 GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Actions。
 
