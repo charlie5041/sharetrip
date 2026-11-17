@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Development export (what Xcode 15.3 and later call "debugging"),
+	     for CI's Firebase App Distribution builds; see README →
+	     Distribution (iOS). -->
+	<key>method</key>
+	<string>debugging</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>V885M744V2</string>
+</dict>
+</plist>
