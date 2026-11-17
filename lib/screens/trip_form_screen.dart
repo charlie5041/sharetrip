@@ -39,7 +39,7 @@ class _TripFormScreenState extends State<TripFormScreen> {
   }
 
   Future<void> _save() async {
-    if (_name.text.trim().isEmpty || _range == null) return;
+    if (_saving || _name.text.trim().isEmpty || _range == null) return;
     setState(() => _saving = true);
     final nav = Navigator.of(context);
     final repo = AppScope.of(context).repo;

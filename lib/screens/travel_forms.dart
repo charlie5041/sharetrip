@@ -109,6 +109,7 @@ class ItemFormScreen extends StatefulWidget {
 }
 
 class _ItemFormScreenState extends State<ItemFormScreen> {
+  bool _saved = false;
   late final _title = TextEditingController(text: widget.existing?.title);
   late final _place = TextEditingController(text: widget.existing?.place);
   late final _mapUrl = TextEditingController(text: widget.existing?.mapUrl);
@@ -132,6 +133,9 @@ class _ItemFormScreenState extends State<ItemFormScreen> {
       setState(() => _error = '請填行程名稱');
       return;
     }
+    // A second tap before the page is gone would save a second copy.
+    if (_saved) return;
+    _saved = true;
     final nav = Navigator.of(context);
     writeInBackground(
       context,
@@ -246,6 +250,7 @@ class FlightFormScreen extends StatefulWidget {
 }
 
 class _FlightFormScreenState extends State<FlightFormScreen> {
+  bool _saved = false;
   late final _no = TextEditingController(text: widget.existing?.flightNo);
   late final _airline = TextEditingController(text: widget.existing?.airline);
   late final _from = TextEditingController(text: widget.existing?.fromCode);
@@ -276,6 +281,9 @@ class _FlightFormScreenState extends State<FlightFormScreen> {
       setState(() => _error = '請填航班編號、出發與抵達機場、出發日期和時間');
       return;
     }
+    // A second tap before the page is gone would save a second copy.
+    if (_saved) return;
+    _saved = true;
     final nav = Navigator.of(context);
     writeInBackground(
       context,
@@ -387,6 +395,7 @@ class LodgingFormScreen extends StatefulWidget {
 }
 
 class _LodgingFormScreenState extends State<LodgingFormScreen> {
+  bool _saved = false;
   late final _name = TextEditingController(text: widget.existing?.name);
   late final _address = TextEditingController(text: widget.existing?.address);
   late final _mapUrl = TextEditingController(text: widget.existing?.mapUrl);
@@ -413,6 +422,9 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       setState(() => _error = '退房要在入住之後');
       return;
     }
+    // A second tap before the page is gone would save a second copy.
+    if (_saved) return;
+    _saved = true;
     final nav = Navigator.of(context);
     writeInBackground(
       context,
