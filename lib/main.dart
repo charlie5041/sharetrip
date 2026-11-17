@@ -1,19 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show PlatformDispatcher, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
-import 'screens/nickname_screen.dart';
 import 'screens/trip_list_screen.dart';
 import 'services/account.dart';
 import 'services/exchange_rates.dart';
+import 'services/reporter.dart';
 import 'services/trip_repository.dart';
 import 'theme.dart';
 
 void main() {
+  // Errors nobody caught go to errorReports, so problems on friends'
+  // phones show up in the Firebase Console.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    Reporter.recordError(details.exception, details.stack);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    Reporter.recordError(error, stack);
+    return false;
+  };
   // Show something at once: signing in can take a while on a slow first
   // connection, and a blank screen reads as a crash.
   runApp(const _Boot());
@@ -51,6 +63,7 @@ class _BootState extends State<_Boot> {
         await auth.authStateChanges().first.timeout(_timeout);
     final user =
         saved ?? (await auth.signInAnonymously().timeout(_timeout)).user!;
+    unawaited(Reporter.attach(firestore: firestore, uid: user.uid));
     return TripRepository(firestore: firestore, uid: user.uid);
   }
 
@@ -165,48 +178,9 @@ class TripShareApp extends StatelessWidget {
         supportedLocales: const [Locale('zh', 'TW')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: buildAppTheme(),
-        home: const _Start(),
+        // No sign-up step: the name is asked for when creating a trip.
+        home: const TripListScreen(),
       ),
-    );
-  }
-}
-
-/// Asks for a nickname on first launch, then shows the trips.
-class _Start extends StatefulWidget {
-  const _Start();
-
-  @override
-  State<_Start> createState() => _StartState();
-}
-
-class _StartState extends State<_Start> {
-  Future<String?>? _nickname;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _nickname ??= AppScope.of(context).repo.loadNickname();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _nickname,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
-        }
-        final name = snap.data;
-        if (name == null || name.isEmpty) {
-          return NicknameScreen(
-            onDone: (n) => setState(() {
-              _nickname = Future.value(n);
-            }),
-          );
-        }
-        return TripListScreen(nickname: name);
-      },
     );
   }
 }

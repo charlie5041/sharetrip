@@ -59,6 +59,12 @@ GitHub 的 secrets 都放在 repo 的 Settings → Secrets and variables → Act
 5. **iOS 憑證**：用抱寶同一張 Apple Development 憑證（team V885M744V2），從「鑰匙圈存取」匯出成 .p12，`base64 -i dev.p12 | pbcopy` 貼進 `IOS_SIGNING_P12`。
 6. **朋友的 iPhone**：開發簽章版只能裝在登記過的裝置上。朋友先從 App Distribution 的邀請信註冊裝置，Firebase Console 會列出 UDID；把 UDID 加到 Apple Developer → Devices，再重發一次（Xcode 自動簽章會把新裝置放進描述檔）。
 
+### 錯誤與問題回報
+
+- App 沒處理到的錯誤（每次開啟最多 20 筆，同樣的錯誤只記一次），以及朋友在旅程列表右上角「回報問題」打的內容，都寫進 Firestore 的 `errorReports`。
+- 查看：Firebase Console → Firestore → `errorReports`，依 `createdAt` 排序。`kind` 是 `error`（自動）或 `feedback`（朋友寫的），`version` 有版號和平台（例如 `0.1.0+9 web-iOS`），`uid` 對得到 `users/{uid}` 的暱稱。
+- 規則只允許新增，任何人都讀不到別人的回報。Crashlytics 不支援網頁版，所以沒有用它。
+
 ### 網頁版（iPhone）
 
 - 網址：https://tripshare-tw.web.app 。用 Safari 打開，分享 →「加入主畫面」。在瀏覽器裡打開時，第一個畫面和旅程列表會出現「把同遊加到主畫面」的卡片，依 iPhone、Android、LINE 等內建瀏覽器顯示對應步驟（`lib/widgets/install_guide.dart`）；Android Chrome 可以一鍵安裝。它是 Firebase 專案裡另外開的 Hosting 網站 `tripshare-tw`，網域也要加在 Authentication → 設定 → 授權網域，Google 登入才會過。舊網址 tripshare-f6209.web.app 會轉到新網址（`firebase.json` 的第二個網站，內容在 `tool/old_site`）。

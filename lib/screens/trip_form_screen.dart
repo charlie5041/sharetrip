@@ -7,8 +7,7 @@ import '../widgets/dates.dart';
 import 'trip_screen.dart';
 
 class TripFormScreen extends StatefulWidget {
-  const TripFormScreen({super.key, required this.nickname});
-  final String nickname;
+  const TripFormScreen({super.key});
 
   @override
   State<TripFormScreen> createState() => _TripFormScreenState();
@@ -16,15 +15,31 @@ class TripFormScreen extends StatefulWidget {
 
 class _TripFormScreenState extends State<TripFormScreen> {
   final _name = TextEditingController();
+  final _me = TextEditingController();
   final _friend = TextEditingController();
   final _friends = <String>[];
   String _currency = 'TWD';
   DateTimeRange? _range;
   bool _saving = false;
+  bool _askedName = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_askedName) return;
+    _askedName = true;
+    // The name used last time, so a second trip needs no typing.
+    AppScope.of(context).repo.loadNickname().then((n) {
+      if (mounted && n != null && _me.text.isEmpty) {
+        setState(() => _me.text = n);
+      }
+    }, onError: (Object _) {});
+  }
 
   @override
   void dispose() {
     _name.dispose();
+    _me.dispose();
     _friend.dispose();
     super.dispose();
   }
@@ -42,11 +57,13 @@ class _TripFormScreenState extends State<TripFormScreen> {
   }
 
   Future<void> _save() async {
-    if (_saving || _name.text.trim().isEmpty || _range == null) return;
+    if (_saving || !_ready) return;
     setState(() => _saving = true);
     final nav = Navigator.of(context);
     final repo = AppScope.of(context).repo;
     final id = repo.newTripId();
+    final me = _me.text.trim();
+    repo.setNickname(me).catchError((Object _) {});
     writeInBackground(
       context,
       repo.createTrip(
@@ -55,7 +72,7 @@ class _TripFormScreenState extends State<TripFormScreen> {
           baseCurrency: _currency,
           startDate: ymd(_range!.start),
           endDate: ymd(_range!.end),
-          nickname: widget.nickname,
+          nickname: me,
           others: [..._friends, if (_friend.text.trim().isNotEmpty) _friend.text],
         ),
     );
@@ -72,9 +89,18 @@ class _TripFormScreenState extends State<TripFormScreen> {
     });
   }
 
+  /// Dates normally come from the platform picker, which tests can't drive.
+  @visibleForTesting
+  void debugSetRange(DateTimeRange r) => setState(() => _range = r);
+
+  bool get _ready =>
+      _name.text.trim().isNotEmpty &&
+      _range != null &&
+      _me.text.trim().isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
-    final ready = _name.text.trim().isNotEmpty && _range != null;
+    final ready = _ready;
     return Scaffold(
       appBar: AppBar(title: const Text('新旅程')),
       body: ListView(
@@ -109,11 +135,16 @@ class _TripFormScreenState extends State<TripFormScreen> {
           const SizedBox(height: 4),
           const Text('朋友用邀請碼加入時，要從這份名單選自己的名字。之後只有你能增減成員。'),
           const SizedBox(height: 8),
+          TextField(
+            controller: _me,
+            maxLength: 20,
+            decoration: const InputDecoration(labelText: '你的名字'),
+            onChanged: (_) => setState(() {}),
+          ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              Chip(label: Text('${widget.nickname}（我）')),
               for (final (i, n) in _friends.indexed)
                 InputChip(
                   label: Text(n),

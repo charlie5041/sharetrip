@@ -18,6 +18,7 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   setDoc,
   where,
   updateDoc,
@@ -262,5 +263,33 @@ describe('users', () => {
     await assertSucceeds(setDoc(doc(db('alice'), 'users/alice'), { nickname: 'A' }));
     await assertFails(setDoc(doc(db('bob'), 'users/alice'), { nickname: 'B' }));
     await assertFails(getDoc(doc(db('bob'), 'users/alice')));
+  });
+});
+
+describe('error reports', () => {
+  const report = (uid, extra = {}) => ({
+    uid, kind: 'feedback', message: '結算怪怪的', version: '0.1.0+9 web-iOS',
+    createdAt: serverTimestamp(), ...extra,
+  });
+
+  test('anyone signed in can send one for themselves', async () => {
+    await assertSucceeds(setDoc(doc(db('alice'), 'errorReports/r1'), report('alice')));
+    await assertSucceeds(setDoc(doc(db('alice'), 'errorReports/r2'),
+      report('alice', { kind: 'error', stack: 'at main.dart' })));
+    await assertFails(setDoc(doc(anon(), 'errorReports/r3'), report('alice')));
+    await assertFails(setDoc(doc(db('bob'), 'errorReports/r4'), report('alice')));
+  });
+
+  test('reports are bounded and cannot be read back or changed', async () => {
+    await assertFails(setDoc(doc(db('alice'), 'errorReports/r1'),
+      report('alice', { message: 'x'.repeat(2001) })));
+    await assertFails(setDoc(doc(db('alice'), 'errorReports/r2'),
+      report('alice', { kind: 'spam' })));
+    await assertFails(setDoc(doc(db('alice'), 'errorReports/r3'),
+      report('alice', { extra: 1 })));
+    await assertSucceeds(setDoc(doc(db('alice'), 'errorReports/r4'), report('alice')));
+    await assertFails(getDoc(doc(db('alice'), 'errorReports/r4')));
+    await assertFails(updateDoc(doc(db('alice'), 'errorReports/r4'), { message: 'x' }));
+    await assertFails(deleteDoc(doc(db('alice'), 'errorReports/r4')));
   });
 });

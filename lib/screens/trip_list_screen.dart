@@ -7,14 +7,13 @@ import '../theme.dart';
 import '../widgets/dates.dart';
 import '../widgets/install_guide.dart';
 import 'account_sheet.dart';
+import 'feedback_dialog.dart';
 import 'join_trip_screen.dart';
 import 'trip_form_screen.dart';
 import 'trip_screen.dart';
 
 class TripListScreen extends StatelessWidget {
-  const TripListScreen({super.key, required this.nickname});
-
-  final String nickname;
+  const TripListScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -32,29 +31,34 @@ class TripListScreen extends StatelessWidget {
               onPressed: () => showAccountSheet(context),
             ),
           IconButton(
+            tooltip: '回報問題',
+            icon: const Icon(Icons.feedback_outlined),
+            onPressed: () => showFeedbackDialog(context),
+          ),
+          IconButton(
             tooltip: '用邀請碼加入',
             icon: const Icon(Icons.group_add_outlined),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => JoinTripScreen(nickname: nickname))),
+                builder: (_) => const JoinTripScreen())),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => TripFormScreen(nickname: nickname))),
+            builder: (_) => const TripFormScreen())),
         icon: const Icon(Icons.add),
         label: const Text('新旅程'),
       ),
       body: Column(
         children: [
           const InstallBanner(margin: EdgeInsets.fromLTRB(16, 8, 16, 0)),
-          Expanded(child: _trips(repo)),
+          Expanded(child: _trips(context, repo)),
         ],
       ),
     );
   }
 
-  Widget _trips(TripRepository repo) => StreamBuilder<List<Trip>>(
+  Widget _trips(BuildContext context, TripRepository repo) => StreamBuilder<List<Trip>>(
         stream: repo.watchMyTrips(),
         builder: (context, snap) {
           if (!snap.hasData) {
@@ -62,11 +66,24 @@ class TripListScreen extends StatelessWidget {
           }
           final trips = snap.data!;
           if (trips.isEmpty) {
-            return const Center(
+            final account = AppScope.of(context).account;
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text('還沒有旅程\n按右下角建立一趟，或用邀請碼加入朋友的旅程',
-                    textAlign: TextAlign.center),
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('還沒有旅程\n按右下角建立一趟，或用邀請碼加入朋友的旅程',
+                        textAlign: TextAlign.center),
+                    if (account != null && account.linkedEmail == null) ...[
+                      const SizedBox(height: 24),
+                      TextButton(
+                        onPressed: () => restoreWithGoogle(context),
+                        child: const Text('用過同遊？用 Google 帳號找回我的旅程'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             );
           }

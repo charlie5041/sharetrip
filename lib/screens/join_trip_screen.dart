@@ -9,8 +9,7 @@ import 'trip_screen.dart';
 /// Enter a friend's invite code, then pick your own name from the places
 /// the trip's owner set up. Someone with no place cannot join.
 class JoinTripScreen extends StatefulWidget {
-  const JoinTripScreen({super.key, required this.nickname});
-  final String nickname;
+  const JoinTripScreen({super.key});
 
   @override
   State<JoinTripScreen> createState() => _JoinTripScreenState();
