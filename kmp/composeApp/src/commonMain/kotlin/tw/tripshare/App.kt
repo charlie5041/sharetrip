@@ -1,104 +1,101 @@
 package tw.tripshare
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.flow.flowOf
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
+import dev.gitlive.firebase.firestore.firestore
+import dev.gitlive.firebase.initialize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
+import tw.tripshare.data.TripRepository
+import tw.tripshare.screens.JoinScreen
+import tw.tripshare.screens.LocalSession
+import tw.tripshare.screens.Session
+import tw.tripshare.screens.TripFormScreen
+import tw.tripshare.screens.TripListScreen
+import tw.tripshare.screens.TripScreen
+import tw.tripshare.ui.AppTheme
+import tw.tripshare.ui.BackPress
+import tw.tripshare.ui.CenterMessage
+import tw.tripshare.ui.InkButton
+import tw.tripshare.ui.LocalNav
+import tw.tripshare.ui.LocalToasts
+import tw.tripshare.ui.Navigator
+import tw.tripshare.ui.Page
+import tw.tripshare.ui.Screen
+import tw.tripshare.ui.Toasts
 
-val LocalTextStyle = staticCompositionLocalOf { TextStyle.Default }
+private var firebaseStarted = false
 
-@Composable
-fun Txt(text: String, size: Int = 16, modifier: Modifier = Modifier) {
-    BasicText(text, modifier, style = LocalTextStyle.current.copy(fontSize = size.sp))
+/** Starts Firebase and signs in anonymously (or restores this device's account). */
+private suspend fun startSession(): Session {
+    if (!firebaseStarted) {
+        Firebase.initialize(platformContext(), firebaseOptions)
+        firebaseStarted = true
+    }
+    val auth = Firebase.auth
+    withTimeout(20_000) {
+        // On the web the saved sign-in is restored asynchronously, so
+        // currentUser is still null at first; signing in again would make a
+        // new anonymous user who is in none of this person's trips.
+        val saved = auth.currentUser ?: auth.authStateChanged.first()
+        if (saved == null) auth.signInAnonymously()
+    }
+    val uid = auth.currentUser!!.uid
+    return Session(TripRepository(Firebase.firestore, uid), CoroutineScope(SupervisorJob()))
 }
 
 @Composable
 fun App() {
-    val style = TextStyle(fontFamily = huninn(), color = AppColors.ink, fontSize = 16.sp)
-    CompositionLocalProvider(LocalTextStyle provides style) {
-        Column(
-            Modifier.fillMaxSize().background(AppColors.paper).safeDrawingPadding().imePadding()
-                .verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Txt("同遊 · Kotlin 原型", size = 26)
-            Txt("平台：$platformName", size = 14)
-            TypingCard()
-            FirebaseCard()
+    AppTheme {
+        var attempt by remember { mutableIntStateOf(0) }
+        var session by remember { mutableStateOf<Session?>(null) }
+        var failed by remember { mutableStateOf(false) }
+        val toasts = remember { Toasts() }
+        LaunchedEffect(attempt) {
+            failed = false
+            runCatching { startSession() }.onSuccess { session = it }.onFailure { failed = true }
         }
-    }
-}
-
-@Composable
-private fun TypingCard() {
-    var text by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxWidth().inkCard(AppColors.yamabuki), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Txt("① 試打注音／日文", size = 18)
-        BasicTextField(
-            value = text,
-            onValueChange = { text = it },
-            singleLine = true,
-            textStyle = LocalTextStyle.current.copy(fontSize = 18.sp),
-            cursorBrush = SolidColor(AppColors.ink),
-            modifier = Modifier.fillMaxWidth()
-                .border(AppShape.border, AppColors.ink, AppShape.small)
-                .background(AppColors.paper, AppShape.small)
-                .padding(12.dp),
-        )
-        Txt("你打的字：$text（${text.length} 字）", size = 14)
-    }
-}
-
-@Composable
-private fun FirebaseCard() {
-    var uid by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        runCatching { Backend.start(); Backend.signIn() }
-            .onSuccess { uid = it }
-            .onFailure { error = it.toString() }
-    }
-    val trips by remember(uid) { uid?.let(Backend::myTrips) ?: flowOf(null) }
-        .collectAsState(null)
-    Column(Modifier.fillMaxWidth().inkCard(AppColors.mizu), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Txt("② Firebase 連線", size = 18)
-        when {
-            error != null -> Txt("失敗：$error", size = 14)
-            uid == null -> Txt("登入中…", size = 14)
-            else -> {
-                Txt("匿名登入成功：${uid!!.take(8)}…", size = 14)
-                val list = trips
-                if (list == null) Txt("讀取旅程中…", size = 14)
-                else if (list.isEmpty()) Txt("這個帳號還沒有旅程（新帳號是正常的）", size = 14)
-                else list.forEach { Txt("・${it.name}　${it.startDate}", size = 14) }
+        CompositionLocalProvider(LocalToasts provides toasts) {
+            val s = session
+            if (s == null) {
+                Page("同遊") {
+                    if (failed) {
+                        CenterMessage("連不上伺服器，請確認網路後再試一次") {
+                            InkButton("重試", { attempt++ }, Modifier.fillMaxWidth())
+                        }
+                    } else {
+                        CenterMessage("同遊啟動中…")
+                    }
+                }
+            } else {
+                // A new navigator per account, so nothing from another identity survives.
+                val nav = remember(s.repo.uid) { Navigator(Screen.TripList) }
+                DisposableEffect(nav) {
+                    BackPress.handler = nav::pop
+                    onDispose { BackPress.handler = null }
+                }
+                CompositionLocalProvider(LocalSession provides s, LocalNav provides nav) {
+                    when (val screen = nav.current) {
+                        Screen.TripList -> TripListScreen()
+                        Screen.NewTrip -> TripFormScreen()
+                        Screen.Join -> JoinScreen()
+                        is Screen.TripView -> TripScreen(screen.tripId)
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(4.dp))
     }
 }

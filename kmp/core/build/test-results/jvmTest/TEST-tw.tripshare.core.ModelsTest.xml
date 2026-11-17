@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="ModelsTest[jvm]" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-17T17:07:58.801Z" hostname="vm" time="0.076">
+<testsuite name="ModelsTest[jvm]" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-17T17:09:59.015Z" hostname="vm" time="0.018">
   <properties/>
-  <testcase name="travelModelsRoundTrip[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.027"/>
-  <testcase name="numbersFromTheWebArriveAsDoubles[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.006"/>
-  <testcase name="unknownCurrencyThrows[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.01"/>
-  <testcase name="timelinePutsTimedStopsFirst[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.005"/>
-  <testcase name="twdAndJpyCarryNoDecimals[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.008"/>
-  <testcase name="expenseRoundTrips[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.002"/>
-  <testcase name="currencyFormatsAndParses[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.01"/>
+  <testcase name="travelModelsRoundTrip[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.002"/>
+  <testcase name="numbersFromTheWebArriveAsDoubles[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.002"/>
+  <testcase name="unknownCurrencyThrows[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.006"/>
+  <testcase name="timelinePutsTimedStopsFirst[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.002"/>
+  <testcase name="twdAndJpyCarryNoDecimals[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.002"/>
+  <testcase name="expenseRoundTrips[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.0"/>
+  <testcase name="currencyFormatsAndParses[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.002"/>
   <testcase name="tripMemberAndItineraryRoundTrip[jvm]" classname="tw.tripshare.core.ModelsTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

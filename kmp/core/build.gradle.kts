@@ -18,6 +18,11 @@ kotlin {
     wasmJs { browser() }
 
     sourceSets {
+        commonMain.dependencies {
+            // Calendar dates only; "today" comes from each platform, since
+            // time zones on the web would need a large extra database.
+            api("org.jetbrains.kotlinx:kotlinx-datetime:0.7.1")
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
