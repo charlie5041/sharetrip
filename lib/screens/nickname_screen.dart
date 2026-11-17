@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import 'account_sheet.dart';
 
 class NicknameScreen extends StatefulWidget {
   const NicknameScreen({super.key, required this.onDone});
@@ -57,6 +58,13 @@ class _NicknameScreenState extends State<NicknameScreen> {
                 onPressed: _saving ? null : _save,
                 child: const Text('開始'),
               ),
+              if (AppScope.of(context).account != null) ...[
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: _saving ? null : () => restoreWithGoogle(context),
+                  child: const Text('用過同遊？用 Google 帳號找回我的旅程'),
+                ),
+              ],
             ],
           ),
         ),

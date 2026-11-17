@@ -39,7 +39,8 @@
 
 ### 發布
 - 照抱寶的方式：改 `pubspec.yaml` 的版本號並推上 `main`，CI 就把 Android APK 和 iOS 開發簽章版發到 Firebase App Distribution。
-- iPhone 朋友要先在 App Tester 註冊裝置，再把 UDID 加進 Apple team。
+- iPhone（2026-11-17 改）：不發 iOS app，改用網頁版 https://tripshare-f6209.web.app ，Safari「加入主畫面」。CI 在改版號時一起部署。iOS 開發簽章版的流程留著，用 repo 變數 `IOS_DISTRIBUTION` 開關。
+- 身分備份：匿名身分可以綁定 Google 帳號（身分 ID 不變），換裝置或網頁資料被清時用 Google 找回。沒綁的人可用新邀請碼加入後，在成員頁認領自己原本的名字，畫面會顯示「從新裝置重新連結」。
 
 ## 視覺風格
 

@@ -98,6 +98,28 @@ void main() {
     expect(net, {'alice': 315, grandma.id: -315});
   });
 
+  test('a member who lost their sign-in can take their name back',
+      () async {
+    final id = await newTrip();
+    final pending = await bob.checkInvite(await alice.createInvite(id));
+    await bob.join(pending, nickname: 'Bob');
+    await alice.saveExpense(
+        id, ramen(payer: 'bob', splits: {'alice': 1, 'bob': 1}));
+
+    // Bob's phone forgot him; he comes back as a new anonymous user.
+    final newBob = TripRepository(firestore: db, uid: 'bob2');
+    final again = await newBob.checkInvite(await alice.createInvite(id));
+    await newBob.join(again, nickname: 'Bob');
+    await newBob.claimMember(id, 'bob', 'bob2');
+
+    final members = await newBob.watchMembers(id).first;
+    expect(members.map((m) => m.id), unorderedEquals(['alice', 'bob']));
+    final b = members.firstWhere((m) => m.id == 'bob');
+    expect(b.uid, 'bob2');
+    expect(b.relinkedAt, isNotNull);
+    expect((await newBob.watchExpenses(id).first).single.payerId, 'bob');
+  });
+
   test('a member who already has expenses cannot claim another name',
       () async {
     final id = await newTrip();

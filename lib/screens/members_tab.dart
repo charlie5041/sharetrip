@@ -53,7 +53,8 @@ class MembersTab extends StatelessWidget {
   Future<void> _tap(BuildContext context, Member m) async {
     final repo = AppScope.of(context).repo;
     final me = data.me;
-    final canClaim = m.uid == null && me != null;
+    final canClaim = me != null && m.id != me.id;
+    final relink = m.uid != null;
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -69,7 +70,9 @@ class MembersTab extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.how_to_reg),
                 title: const Text('這是我'),
-                subtitle: const Text('把這個名字的帳都算到你身上'),
+                subtitle: Text(relink
+                    ? '換了手機或資料不見時用：把這個名字接回這台裝置'
+                    : '把這個名字的帳都算到你身上'),
                 onTap: () => Navigator.pop(ctx, 'claim'),
               ),
           ],
@@ -81,6 +84,8 @@ class MembersTab extends StatelessWidget {
       final name = await _askName(context, title: '改名字', initial: m.name);
       if (name != null) await repo.renameMember(data.trip.id, m.id, name);
     } else if (action == 'claim') {
+      if (relink && !await _confirmRelink(context, m.name)) return;
+      if (!context.mounted) return;
       try {
         await repo.claimMember(data.trip.id, m.id, me!.id);
       } on StateError catch (e) {
@@ -108,7 +113,11 @@ class MembersTab extends StatelessWidget {
                 child: Text(m.name.characters.first),
               ),
               title: Text(m.uid == data.myUid ? '${m.name}（我）' : m.name),
-              subtitle: m.uid == null ? const Text('沒有 app') : null,
+              subtitle: m.uid == null
+                  ? const Text('沒有 app')
+                  : m.relinkedAt != null
+                      ? Text('${_md(m.relinkedAt!)} 從新裝置重新連結')
+                      : null,
             ),
           ),
         Padding(
@@ -133,6 +142,33 @@ class MembersTab extends StatelessWidget {
       ],
     );
   }
+}
+
+String _md(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return '${d.month}/${d.day}';
+}
+
+Future<bool> _confirmRelink(BuildContext context, String name) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('你是「$name」嗎？'),
+      content: Text(
+          '只有在換了手機、刪掉 app，或網頁資料不見時才需要這樣做。'
+          '確定後，「$name」的帳會接到這台裝置，原本的裝置就不再代表這個名字。'
+          '其他人會在成員頁看到這次重新連結。'),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消')),
+        FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('是我，接回來')),
+      ],
+    ),
+  );
+  return ok ?? false;
 }
 
 Future<String?> _askName(BuildContext context,

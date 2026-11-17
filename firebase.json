@@ -21,7 +21,8 @@
           "projectId": "tripshare-f6209",
           "configurations": {
             "android": "1:307482465264:android:ec5f444450ac8de73d0335",
-            "ios": "1:307482465264:ios:2a529e9649d39bbb3d0335"
+            "ios": "1:307482465264:ios:2a529e9649d39bbb3d0335",
+            "web": "1:307482465264:web:4ff23232bc0db95e3d0335"
           }
         }
       }
@@ -39,5 +40,38 @@
       "enabled": false
     },
     "singleProjectMode": true
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(ttf|otf|png|wasm)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }
