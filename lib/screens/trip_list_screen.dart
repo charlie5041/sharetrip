@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/dates.dart';
 import '../widgets/install_guide.dart';
 import 'account_sheet.dart';
+import 'feedback_dialog.dart';
 import 'join_trip_screen.dart';
 import 'trip_form_screen.dart';
 import 'trip_screen.dart';
@@ -31,6 +32,11 @@ class TripListScreen extends StatelessWidget {
                   : Icons.verified_user_outlined),
               onPressed: () => showAccountSheet(context),
             ),
+          IconButton(
+            tooltip: '回報問題',
+            icon: const Icon(Icons.feedback_outlined),
+            onPressed: () => showFeedbackDialog(context),
+          ),
           IconButton(
             tooltip: '用邀請碼加入',
             icon: const Icon(Icons.group_add_outlined),
