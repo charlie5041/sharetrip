@@ -200,17 +200,27 @@ class TripRepository {
     await batch.commit();
   }
 
-  /// Makes this device the person behind name-only member [placeholderId],
-  /// dropping the member this device joined as. Refused while anything
-  /// still points at that member, so no expense is ever orphaned.
+  /// Makes this device the person behind member [placeholderId], dropping
+  /// the member this device joined as. Refused while anything still points
+  /// at that member, so no expense is ever orphaned.
+  ///
+  /// [placeholderId] is either a name-only member, or a member whose
+  /// device lost its anonymous sign-in (a new phone, cleared web data) and
+  /// came back through a fresh invite. The second case is stamped with
+  /// relinkedAt so the others can see it happened.
   Future<void> claimMember(
       String tripId, String placeholderId, String myMemberId) async {
     final used = await _isReferenced(tripId, myMemberId);
     if (used) {
       throw StateError('你已經有記帳紀錄，無法認領其他名字');
     }
+    final target = await _members(tripId).doc(placeholderId).get();
+    final relink = target.data()?['uid'] != null;
     final batch = _db.batch()
-      ..update(_members(tripId).doc(placeholderId), {'uid': uid})
+      ..update(_members(tripId).doc(placeholderId), {
+        'uid': uid,
+        if (relink) 'relinkedAt': _now,
+      })
       ..delete(_members(tripId).doc(myMemberId));
     await batch.commit();
   }

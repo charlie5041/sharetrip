@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -36,10 +37,20 @@ class _BootState extends State<_Boot> {
       await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform);
     }
+    final firestore = FirebaseFirestore.instance;
+    if (kIsWeb) {
+      // Off by default on the web; without it the app shows nothing offline.
+      firestore.settings = const Settings(persistenceEnabled: true);
+    }
     final auth = FirebaseAuth.instance;
-    final user = auth.currentUser ??
-        (await auth.signInAnonymously().timeout(_timeout)).user!;
-    return TripRepository(firestore: FirebaseFirestore.instance, uid: user.uid);
+    // On the web the saved sign-in is restored asynchronously, so
+    // currentUser is still null here; signing in again would make a new
+    // anonymous user who is in none of this person's trips.
+    final saved = auth.currentUser ??
+        await auth.authStateChanges().first.timeout(_timeout);
+    final user =
+        saved ?? (await auth.signInAnonymously().timeout(_timeout)).user!;
+    return TripRepository(firestore: firestore, uid: user.uid);
   }
 
   @override
