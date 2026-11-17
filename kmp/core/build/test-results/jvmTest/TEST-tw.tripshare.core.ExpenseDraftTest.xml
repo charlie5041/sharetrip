@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="ExpenseDraftTest[jvm]" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-17T17:37:17.166Z" hostname="vm" time="0.032">
+<testsuite name="ExpenseDraftTest[jvm]" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-17T17:40:11.977Z" hostname="vm" time="0.042">
   <properties/>
-  <testcase name="baseCurrencyIgnoresTypedRate[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.016"/>
-  <testcase name="exactMustAddUp[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.008"/>
-  <testcase name="parsesTimes[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.001"/>
+  <testcase name="baseCurrencyIgnoresTypedRate[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.017"/>
+  <testcase name="exactMustAddUp[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.012"/>
+  <testcase name="parsesTimes[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.002"/>
   <testcase name="buildsEqualSplitInMemberOrder[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.001"/>
   <testcase name="formatsRatesToSixDigits[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.001"/>
-  <testcase name="rejectsBadInput[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.001"/>
-  <testcase name="roundTripsThroughEditing[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.004"/>
+  <testcase name="rejectsBadInput[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.0"/>
+  <testcase name="roundTripsThroughEditing[jvm]" classname="tw.tripshare.core.ExpenseDraftTest" time="0.007"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

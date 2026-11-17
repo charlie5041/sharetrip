@@ -14,6 +14,10 @@ sealed interface Screen {
     data class TripView(val tripId: String) : Screen
     /** Adds an expense when [expenseId] is null, otherwise edits it. */
     data class ExpenseForm(val tripId: String, val expenseId: String?) : Screen
+    /** A stop on [date]; edits [itemId] when set. */
+    data class ItemForm(val tripId: String, val itemId: String?, val date: String) : Screen
+    data class FlightForm(val tripId: String, val flightId: String?) : Screen
+    data class LodgingForm(val tripId: String, val lodgingId: String?) : Screen
 }
 
 /**

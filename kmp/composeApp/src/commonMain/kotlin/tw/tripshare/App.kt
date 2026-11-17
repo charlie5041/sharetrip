@@ -26,6 +26,9 @@ import tw.tripshare.screens.Session
 import tw.tripshare.screens.TripFormScreen
 import tw.tripshare.screens.TripListScreen
 import tw.tripshare.screens.ExpenseFormScreen
+import tw.tripshare.screens.FlightFormScreen
+import tw.tripshare.screens.ItemFormScreen
+import tw.tripshare.screens.LodgingFormScreen
 import tw.tripshare.screens.TripScreen
 import tw.tripshare.ui.AppTheme
 import tw.tripshare.ui.BackPress
@@ -95,6 +98,9 @@ fun App() {
                         Screen.Join -> JoinScreen()
                         is Screen.TripView -> TripScreen(screen.tripId)
                         is Screen.ExpenseForm -> ExpenseFormScreen(screen.tripId, screen.expenseId)
+                        is Screen.ItemForm -> ItemFormScreen(screen.tripId, screen.itemId, screen.date)
+                        is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
+                        is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
                     }
                 }
             }

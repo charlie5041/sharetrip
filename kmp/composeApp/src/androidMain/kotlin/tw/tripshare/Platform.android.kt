@@ -66,3 +66,12 @@ actual val firebaseOptions = FirebaseOptions(
     storageBucket = "tripshare-f6209.firebasestorage.app",
     gcmSenderId = "307482465264",
 )
+
+actual fun openUrl(url: String) {
+    runCatching {
+        appContext.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}

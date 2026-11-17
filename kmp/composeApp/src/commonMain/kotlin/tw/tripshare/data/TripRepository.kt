@@ -8,6 +8,7 @@ import dev.gitlive.firebase.firestore.Timestamp
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import tw.tripshare.core.ChecklistEntry
+import tw.tripshare.core.ChecklistKind
 import tw.tripshare.core.Doc
 import tw.tripshare.core.Expense
 import tw.tripshare.core.Flight
@@ -221,17 +222,54 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
 
     suspend fun deleteSettlement(tripId: String, id: String) = sub(tripId, "settlements").document(id).delete()
 
-    // ---- The rest of a trip (screens arrive in later steps) -----------------
+    // ---- Itinerary, flights, lodging, checklists ---------------------------
 
     fun watchItems(tripId: String): Flow<List<ItineraryItem>> =
         sub(tripId, "items").watch(ItineraryItem::fromMap).map { l -> l.sortedWith(ItineraryItem.timelineOrder) }
 
+    /** New stops go last among the untimed ones of their day. */
+    suspend fun saveItem(tripId: String, item: ItineraryItem) {
+        if (item.id.isEmpty()) sub(tripId, "items").add(item.toMap() + ("order" to nowMillis()))
+        else sub(tripId, "items").document(item.id).set(item.toMap())
+    }
+
+    suspend fun deleteItem(tripId: String, id: String) = sub(tripId, "items").document(id).delete()
+
     fun watchFlights(tripId: String): Flow<List<Flight>> =
         sub(tripId, "flights").watch(Flight::fromMap).map { l -> l.sortedBy { it.departKey } }
+
+    suspend fun saveFlight(tripId: String, f: Flight) {
+        if (f.id.isEmpty()) sub(tripId, "flights").add(f.toMap()) else sub(tripId, "flights").document(f.id).set(f.toMap())
+    }
+
+    suspend fun deleteFlight(tripId: String, id: String) = sub(tripId, "flights").document(id).delete()
 
     fun watchLodgings(tripId: String): Flow<List<Lodging>> =
         sub(tripId, "lodgings").watch(Lodging::fromMap).map { l -> l.sortedBy { it.checkIn } }
 
+    suspend fun saveLodging(tripId: String, l: Lodging) {
+        if (l.id.isEmpty()) sub(tripId, "lodgings").add(l.toMap()) else sub(tripId, "lodgings").document(l.id).set(l.toMap())
+    }
+
+    suspend fun deleteLodging(tripId: String, id: String) = sub(tripId, "lodgings").document(id).delete()
+
     fun watchChecklist(tripId: String): Flow<List<ChecklistEntry>> =
         sub(tripId, "checklist").watch(ChecklistEntry::fromMap).map { l -> l.sortedBy { it.order } }
+
+    suspend fun addChecklistEntries(tripId: String, kind: ChecklistKind, texts: List<String>) {
+        val batch = db.batch()
+        var order = nowMillis()
+        texts.map { it.trim() }.filter { it.isNotEmpty() }.forEach { t ->
+            batch.set(
+                sub(tripId, "checklist").document,
+                mapOf("kind" to kind.name, "text" to t, "done" to false, "doneBy" to null, "order" to order++),
+            )
+        }
+        batch.commit()
+    }
+
+    suspend fun setChecklistDone(tripId: String, id: String, done: Boolean, byName: String) =
+        sub(tripId, "checklist").document(id).update("done" to done, "doneBy" to if (done) byName else null)
+
+    suspend fun deleteChecklistEntry(tripId: String, id: String) = sub(tripId, "checklist").document(id).delete()
 }

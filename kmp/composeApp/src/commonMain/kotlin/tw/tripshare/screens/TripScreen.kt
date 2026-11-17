@@ -21,8 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import tw.tripshare.core.ChecklistEntry
 import tw.tripshare.core.Currency
 import tw.tripshare.core.Expense
+import tw.tripshare.core.Flight
+import tw.tripshare.core.ItineraryItem
+import tw.tripshare.core.Lodging
 import tw.tripshare.core.Member
 import tw.tripshare.core.Settlement
 import tw.tripshare.core.Trip
@@ -39,6 +43,10 @@ data class TripData(
     val members: List<Member>,
     val expenses: List<Expense>,
     val settlements: List<Settlement>,
+    val items: List<ItineraryItem>,
+    val flights: List<Flight>,
+    val lodgings: List<Lodging>,
+    val checklist: List<ChecklistEntry>,
     val myUid: String,
 ) {
     val me: Member? get() = members.firstOrNull { it.uid == myUid }
@@ -64,6 +72,10 @@ fun rememberTripData(tripId: String): Load<TripData> {
     val members by remember(tripId) { repo.watchMembers(tripId).catch { } }.collectAsState(null)
     val expenses by remember(tripId) { repo.watchExpenses(tripId).catch { } }.collectAsState(null)
     val settlements by remember(tripId) { repo.watchSettlements(tripId).catch { } }.collectAsState(null)
+    val items by remember(tripId) { repo.watchItems(tripId).catch { } }.collectAsState(null)
+    val flights by remember(tripId) { repo.watchFlights(tripId).catch { } }.collectAsState(null)
+    val lodgings by remember(tripId) { repo.watchLodgings(tripId).catch { } }.collectAsState(null)
+    val checklist by remember(tripId) { repo.watchChecklist(tripId).catch { } }.collectAsState(null)
     val t = trip
     if (t is Load.Gone) return Load.Gone
     if (t !is Load.Ready) return Load.Waiting
@@ -73,6 +85,10 @@ fun rememberTripData(tripId: String): Load<TripData> {
             members ?: return Load.Waiting,
             expenses ?: return Load.Waiting,
             settlements ?: return Load.Waiting,
+            items ?: return Load.Waiting,
+            flights ?: return Load.Waiting,
+            lodgings ?: return Load.Waiting,
+            checklist ?: return Load.Waiting,
             repo.uid,
         ),
     )
@@ -94,14 +110,16 @@ private val TABS = listOf("總覽", "行程", "記帳", "結算", "清單", "成
 @Composable
 fun TripScreen(tripId: String) {
     val nav = LocalNav.current
-    var tab by rememberSaveable(tripId) { mutableIntStateOf(TABS.indexOf("記帳")) }
+    var tab by rememberSaveable(tripId) { mutableIntStateOf(0) }
     WithTrip(tripId) { data ->
         Page(data.trip.name, onBack = { nav.pop() }, bottom = { TabBar(tab) { tab = it } }) {
             when (TABS[tab]) {
+                "總覽" -> OverviewTab(data)
+                "行程" -> ItineraryTab(data)
                 "記帳" -> ExpensesTab(data)
                 "結算" -> SettleTab(data)
-                "成員" -> MembersTab(data)
-                else -> CenterMessage("「${TABS[tab]}」還在搬到新版，下一步就做。")
+                "清單" -> ChecklistTab(data)
+                else -> MembersTab(data)
             }
         }
     }

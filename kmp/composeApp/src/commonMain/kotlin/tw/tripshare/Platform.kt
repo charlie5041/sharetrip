@@ -31,3 +31,6 @@ expect fun localMillis(dt: kotlinx.datetime.LocalDateTime): Long
 
 /** The body of a GET to [url], or null on any failure. No timeout; callers add one. */
 expect suspend fun httpGetText(url: String): String?
+
+/** Opens [url] in the browser or the app that handles it (Google Maps for map links). */
+expect fun openUrl(url: String)

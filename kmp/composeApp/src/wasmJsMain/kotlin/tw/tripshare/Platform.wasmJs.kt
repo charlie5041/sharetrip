@@ -53,3 +53,7 @@ actual val firebaseOptions = FirebaseOptions(
     storageBucket = "tripshare-f6209.firebasestorage.app",
     gcmSenderId = "307482465264",
 )
+
+private fun jsOpen(url: String): Unit = js("void window.open(url, '_blank', 'noopener')")
+
+actual fun openUrl(url: String) = jsOpen(url)

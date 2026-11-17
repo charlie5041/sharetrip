@@ -39,6 +39,8 @@ fun DateRangeDialog(
     onDone: (LocalDate, LocalDate) -> Unit,
     onDismiss: () -> Unit,
     single: Boolean = false,
+    startLabel: String = "出發日",
+    endLabel: String = "回程日",
 ) {
     var month by remember { mutableStateOf(LocalDate((initialStart ?: today).year, (initialStart ?: today).month, 1)) }
     var start by remember { mutableStateOf(initialStart) }
@@ -46,8 +48,8 @@ fun DateRangeDialog(
 
     val hint = when {
         single -> start?.let { shortDate(ymd(it)) } ?: "點一天"
-        start == null -> "點出發日"
-        end == null -> "${shortDate(ymd(start!!))} 出發，再點回程日"
+        start == null -> "點$startLabel"
+        end == null -> "${shortDate(ymd(start!!))} 開始，再點$endLabel"
         else -> "${shortDate(ymd(start!!))} – ${shortDate(ymd(end!!))}"
     }
     InkDialog("選擇日期", onDismiss, buttons = {
