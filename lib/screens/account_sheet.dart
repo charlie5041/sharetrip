@@ -17,14 +17,27 @@ Future<void> showAccountSheet(BuildContext context) {
 /// 同遊 before on another device.
 Future<void> restoreWithGoogle(BuildContext context) async {
   final scope = AppScope.of(context);
-  final messenger = ScaffoldMessenger.of(context);
   try {
     await scope.account!.signInWithGoogle();
     scope.restart();
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text(accountErrorText(e))));
+    if (context.mounted) await _showError(context, e);
   }
 }
+
+/// A dialog rather than a snack bar: under the bottom sheet a snack bar is
+/// hidden, and a failed sign-in then looks like a button that does nothing.
+Future<void> _showError(BuildContext context, Object e) => showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Google 登入沒有成功'),
+        content: Text(accountErrorText(e)),
+        actions: [
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('好')),
+        ],
+      ),
+    );
 
 class _AccountSheet extends StatefulWidget {
   const _AccountSheet();
@@ -48,7 +61,7 @@ class _AccountSheetState extends State<_AccountSheet> {
     } on AccountInUse catch (e) {
       if (mounted) await _offerSwitch(e);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(accountErrorText(e))));
+      if (mounted) await _showError(context, e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -84,14 +97,15 @@ class _AccountSheetState extends State<_AccountSheet> {
 
   Future<void> _switch() async {
     final scope = AppScope.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
       await scope.account!.signInWithGoogle();
       scope.restart();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(accountErrorText(e))));
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        await _showError(context, e);
+      }
     }
   }
 
