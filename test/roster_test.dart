@@ -10,10 +10,10 @@ import 'package:sharetrip/services/trip_repository.dart';
 import 'package:sharetrip/theme.dart';
 
 Widget _app(TripRepository repo, Widget home) => AppScope(
-      repo: repo,
-      rates: ExchangeRates(),
-      child: MaterialApp(theme: buildAppTheme(), home: home),
-    );
+  repo: repo,
+  rates: ExchangeRates(),
+  child: MaterialApp(theme: buildAppTheme(), home: home),
+);
 
 void main() {
   late FakeFirebaseFirestore db;
@@ -27,27 +27,59 @@ void main() {
   });
 
   Future<String> newTrip() => alice.createTrip(
-        name: '東京',
-        baseCurrency: 'TWD',
-        startDate: '2026-12-20',
-        endDate: '2026-12-25',
-        nickname: 'Alice',
-        others: ['Bob'],
-      );
+    name: '東京',
+    baseCurrency: 'TWD',
+    startDate: '2026-12-20',
+    endDate: '2026-12-25',
+    nickname: 'Alice',
+    others: ['Bob'],
+  );
 
   testWidgets('the trip form takes the member list', (tester) async {
-    await tester.pumpWidget(_app(alice, const TripFormScreen(nickname: 'Alice')));
+    await alice.setNickname('Alice');
+    await tester.pumpWidget(_app(alice, const TripFormScreen()));
+    await tester.pumpAndSettle();
+    // The name from last time is filled in.
+    expect(find.widgetWithText(TextField, 'Alice'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, '朋友的名字'), 'Bob');
     await tester.tap(find.byTooltip('加進名單'));
     await tester.pump();
     expect(find.text('Bob'), findsOneWidget);
-    expect(find.text('Alice（我）'), findsOneWidget);
+  });
+
+  testWidgets('a first trip asks for your name and remembers it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(alice, const TripFormScreen()));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, '旅程名稱，例如「東京五日」'),
+      '大阪',
+    );
+    final state = tester.state(find.byType(TripFormScreen)) as dynamic;
+    // Dates come from a picker; set them directly.
+    state.debugSetRange(
+      DateTimeRange(start: DateTime(2026, 12, 20), end: DateTime(2026, 12, 22)),
+    );
+    await tester.pump();
+    final create = find.widgetWithText(FilledButton, '建立');
+    expect(tester.widget<FilledButton>(create).onPressed, isNull);
+    await tester.enterText(find.widgetWithText(TextField, '你的名字'), '小美');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(create).onPressed, isNotNull);
+    await tester.tap(create);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(await alice.loadNickname(), '小美');
+    final trips = await alice.watchMyTrips().first;
+    final members = await alice.watchMembers(trips.single.id).first;
+    expect(members.map((m) => m.name), ['小美']);
   });
 
   testWidgets('a friend joins by picking their name', (tester) async {
     final id = await newTrip();
     final code = await alice.createInvite(id);
-    await tester.pumpWidget(_app(bob, const JoinTripScreen(nickname: 'B')));
+    await tester.pumpWidget(_app(bob, const JoinTripScreen()));
     await tester.enterText(find.byType(TextField), code);
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
