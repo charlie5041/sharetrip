@@ -5,6 +5,7 @@ import '../models/trip.dart';
 import '../services/trip_repository.dart';
 import '../theme.dart';
 import '../widgets/dates.dart';
+import '../widgets/install_guide.dart';
 import 'account_sheet.dart';
 import 'join_trip_screen.dart';
 import 'trip_form_screen.dart';
@@ -44,7 +45,16 @@ class TripListScreen extends StatelessWidget {
         icon: const Icon(Icons.add),
         label: const Text('新旅程'),
       ),
-      body: StreamBuilder<List<Trip>>(
+      body: Column(
+        children: [
+          const InstallBanner(margin: EdgeInsets.fromLTRB(16, 8, 16, 0)),
+          Expanded(child: _trips(repo)),
+        ],
+      ),
+    );
+  }
+
+  Widget _trips(TripRepository repo) => StreamBuilder<List<Trip>>(
         stream: repo.watchMyTrips(),
         builder: (context, snap) {
           if (!snap.hasData) {
@@ -65,9 +75,7 @@ class TripListScreen extends StatelessWidget {
             children: [for (final t in trips) _TripCard(trip: t)],
           );
         },
-      ),
-    );
-  }
+      );
 }
 
 class _TripCard extends StatelessWidget {

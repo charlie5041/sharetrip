@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../widgets/install_guide.dart';
 import 'account_sheet.dart';
 
 class NicknameScreen extends StatefulWidget {
@@ -40,6 +41,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const InstallBanner(margin: EdgeInsets.only(bottom: 32)),
               Text('歡迎來到同遊',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium),

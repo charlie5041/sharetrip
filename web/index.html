@@ -44,6 +44,15 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    // Android Chrome offers its install dialog once; keep it for the
+    // "add to home screen" guide in the app.
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      window.tripshareInstall = e;
+    });
+    window.addEventListener("appinstalled", () => { window.tripshareInstall = null; });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
