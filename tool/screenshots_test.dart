@@ -8,6 +8,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sharetrip/illustrations/trip_scene.dart';
 import 'package:sharetrip/main.dart';
 import 'package:sharetrip/models/expense.dart';
 import 'package:sharetrip/models/itinerary_item.dart';
@@ -118,12 +119,53 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
           home: TripScreen(tripId: id, initialTab: tab),
         ),
       ));
-      await tester.pumpAndSettle();
+      await settle(tester);
       await expectLater(find.byType(MaterialApp),
           matchesGoldenFile('screenshots/$name.png'));
     });
+  }
+
+  testWidgets('05-scenes', (tester) async {
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: buildAppTheme(),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: true),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            for (final n in ['東京五日遊', '首爾購物行', '沖繩自駕', '歐洲蜜月'])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(children: [TripScene(tripName: n), Text(n)]),
+              ),
+          ],
+        ),
+      ),
+    ));
+    await settle(tester);
+    await expectLater(find.byType(MaterialApp),
+        matchesGoldenFile('screenshots/05-scenes.png'));
+  });
+}
+
+/// Lets SVGs decode (real async work) and freezes the illustrations.
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 3; i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pump(const Duration(milliseconds: 100));
   }
 }

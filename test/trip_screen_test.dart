@@ -42,7 +42,10 @@ void main() {
     await tester.pumpWidget(AppScope(
       repo: repo,
       rates: ExchangeRates(),
-      child: MaterialApp(theme: buildAppTheme(), home: TripScreen(tripId: id, initialTab: 3)),
+      child: MaterialApp(
+        theme: buildAppTheme(),
+        home: TripScreen(tripId: id, initialTab: 3),
+      ),
     ));
     await tester.pumpAndSettle();
 
@@ -73,7 +76,10 @@ void main() {
     await tester.pumpWidget(AppScope(
       repo: repo,
       rates: ExchangeRates(),
-      child: MaterialApp(theme: buildAppTheme(), home: TripScreen(tripId: id, initialTab: 3)),
+      child: MaterialApp(
+        theme: buildAppTheme(),
+        home: TripScreen(tripId: id, initialTab: 3),
+      ),
     ));
     await tester.pumpAndSettle();
     await tester.tap(find.text('記一筆'));

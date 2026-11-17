@@ -23,7 +23,9 @@ Future<(TripRepository, String)> seed() async {
   return (repo, id);
 }
 
-Widget app(TripRepository repo, String id, {int tab = 0, bool calm = false}) =>
+// Calm by default: the header illustration animates forever, which
+// pumpAndSettle would wait on.
+Widget app(TripRepository repo, String id, {int tab = 0, bool calm = true}) =>
     AppScope(
       repo: repo,
       rates: ExchangeRates(),

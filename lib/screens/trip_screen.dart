@@ -131,7 +131,11 @@ class _TripScreenState extends State<TripScreen> {
     ];
     return Scaffold(
       appBar: AppBar(title: Text(data.trip.name)),
-      body: IndexedStack(index: _tab, children: pages),
+      // Hidden tabs keep their state but stop animating.
+      body: IndexedStack(index: _tab, children: [
+        for (var i = 0; i < pages.length; i++)
+          TickerMode(enabled: i == _tab, child: pages[i]),
+      ]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
