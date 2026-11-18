@@ -25,12 +25,76 @@
     // Before the app starts, an error is shown instead of a blank page (for
     // example a browser without WebAssembly GC), so a tester can tell us why.
     // Once it runs, the app sets tripshareOnError and reports errors itself.
-    function showError(msg) {
-      var s = document.getElementById('status');
-      if (!s) { s = document.createElement('div'); s.id = 'status'; s.style.background = '#FFFCF6'; s.style.zIndex = 9; document.body.appendChild(s); }
-      s.textContent = '無法啟動：\n' + msg + '\n\n' + navigator.userAgent;
+    var errors = [];
+    var lastBoot = null;
+    try { lastBoot = localStorage.getItem('tripshare-boot'); localStorage.setItem('tripshare-boot', 'loading'); } catch (_) {}
+    function setBoot(v) { try { localStorage.setItem('tripshare-boot', v); } catch (_) {} }
+
+    // What a tester can read to us when the screen stays blank.
+    function diagnostics() {
+      var lines = [];
+      lines.push('畫面 ' + innerWidth + '×' + innerHeight + ' @' + devicePixelRatio + 'x，螢幕 ' + screen.width + '×' + screen.height);
+      var canvases = document.getElementsByTagName('canvas');
+      for (var i = 0; i < canvases.length; i++) {
+        var c = canvases[i];
+        lines.push('畫布 ' + c.width + '×' + c.height + '（顯示 ' + c.clientWidth + '×' + c.clientHeight + '）');
+      }
+      if (!canvases.length) lines.push('沒有畫布');
+      try {
+        var gl = document.createElement('canvas').getContext('webgl2');
+        lines.push(gl ? 'WebGL2 可用，最大材質 ' + gl.getParameter(gl.MAX_TEXTURE_SIZE) + '、最大畫布 ' + gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) : 'WebGL2 不可用');
+      } catch (e) { lines.push('WebGL2 錯誤 ' + e); }
+      lines.push('Wasm GC ' + (wasmGc() ? '可用' : '不可用'));
+      lines.push('主畫面模式 ' + (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true ? '是' : '否'));
+      lines.push('離線快取 ' + (navigator.serviceWorker && navigator.serviceWorker.controller ? '使用中' : '沒有'));
+      lines.push('啟動狀態 ' + (window.tripshareBoot || 'loading') + '，上次 ' + (lastBoot || '無'));
+      for (var j = 0; j < errors.length; j++) lines.push('錯誤 ' + errors[j]);
+      lines.push(navigator.userAgent);
+      return lines.join('\n');
     }
+    function wasmGc() {
+      // A module that only declares an empty struct type: valid only with GC.
+      try { return WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 3, 1, 95, 0])); } catch (_) { return false; }
+    }
+    function button(label, action) {
+      var b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'margin:6px;padding:10px 16px;font-size:16px;border:3px solid #3E3A39;border-radius:14px;background:#F6D27A;color:#3E3A39';
+      b.onclick = action;
+      return b;
+    }
+    function reloadClean() {
+      var jobs = [];
+      if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+      if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+      Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+    }
+    function showPanel(title) {
+      var s = document.getElementById('diag');
+      if (!s) {
+        s = document.createElement('div');
+        s.id = 'diag';
+        s.style.cssText = 'position:fixed;inset:0;z-index:9;overflow:auto;background:#FFFCF6;color:#3E3A39;padding:24px;padding-top:max(24px,env(safe-area-inset-top));font:15px/1.5 system-ui,sans-serif;white-space:pre-wrap;text-align:center';
+        document.body.appendChild(s);
+      }
+      s.textContent = '';
+      var h = document.createElement('div');
+      h.style.cssText = 'font-size:18px;font-weight:bold;margin-bottom:12px';
+      h.textContent = title;
+      var d = document.createElement('div');
+      d.style.cssText = 'font-size:13px;text-align:left;margin:12px auto;max-width:640px;user-select:text;-webkit-user-select:text';
+      d.textContent = diagnostics();
+      s.appendChild(h);
+      s.appendChild(button('重新載入', function () { location.reload(); }));
+      s.appendChild(button('清除快取後重新載入', reloadClean));
+      if (window.tripshareBoot === 'ready') s.appendChild(button('關閉', function () { s.remove(); }));
+      s.appendChild(d);
+      var st = document.getElementById('status');
+      if (st) st.remove();
+    }
+    function showError(msg) { showPanel('無法啟動：' + msg + '\n請截圖這個畫面傳給我們'); }
     function onError(msg, stack) {
+      errors.push(msg);
       if (window.tripshareOnError) window.tripshareOnError(msg, stack);
       else showError(msg);
     }
@@ -41,6 +105,29 @@
       var r = e.reason;
       onError(String(r && (r.message || r)), r && r.stack);
     });
+    // The app's drawing surface can be taken away by the system (memory
+    // pressure, a large screen); say so instead of leaving it blank.
+    window.addEventListener('webglcontextlost', function () {
+      errors.push('畫布被系統回收 (WebGL context lost)');
+      showPanel('畫面被系統中斷了，請重新載入');
+    }, true);
+    // main() marks 'started', the first drawn frame marks 'ready'. If that
+    // doesn't happen, or ?debug is in the address, show what we know.
+    window.tripshareReady = function () {
+      window.tripshareBoot = 'ready';
+      setBoot('ready');
+      if (/[?&]debug/.test(location.search)) showPanel('診斷資訊');
+    };
+    setTimeout(function () {
+      if (window.tripshareBoot !== 'ready' && !document.getElementById('diag')) {
+        showPanel(wasmGc() ? '同遊一直沒有啟動完成\n請截圖這個畫面傳給我們' : '這台裝置的瀏覽器太舊\n請更新到 iOS / iPadOS 18.2 以上，或改用最新版 Chrome');
+      }
+    }, 20000);
+    if (!wasmGc()) {
+      window.addEventListener('DOMContentLoaded', function () {
+        showPanel('這台裝置的瀏覽器太舊\n請更新到 iOS / iPadOS 18.2 以上，或改用最新版 Chrome');
+      });
+    }
     // Android Chrome offers its install dialog once; keep it for the
     // "add to home screen" guide in the app.
     window.addEventListener('beforeinstallprompt', function (e) {
