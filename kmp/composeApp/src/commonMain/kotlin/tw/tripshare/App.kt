@@ -93,7 +93,7 @@ fun App() {
         var session by remember { mutableStateOf<Session?>(null) }
         var failed by remember { mutableStateOf(false) }
         var signedOut by remember { mutableStateOf(false) }
-        val restart = { session = null; signedOut = false; attempt++ }
+        val restart: () -> Unit = { session = null; signedOut = false; attempt++ }
         val toasts = remember { Toasts() }
         LaunchedEffect(attempt) {
             failed = false

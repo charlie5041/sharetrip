@@ -13,6 +13,7 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import tw.tripshare.core.Trip
@@ -45,7 +46,7 @@ fun LoginScreen(anonymous: TripRepository?, onSignedIn: () -> Unit) {
     // The rules refuse anonymous accounts, so this usually comes from the
     // phone's cache, or not at all (unknown: never switch without asking).
     val tripsFlow: Flow<List<Trip>?> = remember(anonymous) {
-        anonymous?.watchMyTrips()?.catch { emit(null) } ?: flowOf(emptyList())
+        anonymous?.watchMyTrips()?.map<List<Trip>, List<Trip>?> { it }?.catch { emit(null) } ?: flowOf(emptyList())
     }
     val trips by tripsFlow.collectAsState(null)
     var busy by remember { mutableStateOf(false) }
