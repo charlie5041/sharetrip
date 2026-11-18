@@ -18,6 +18,8 @@ sealed interface Screen {
     data class ItemForm(val tripId: String, val itemId: String?, val date: String) : Screen
     data class FlightForm(val tripId: String, val flightId: String?) : Screen
     data class LodgingForm(val tripId: String, val lodgingId: String?) : Screen
+    /** 從試算表匯入 into this trip. */
+    data class Import(val tripId: String) : Screen
 }
 
 /**

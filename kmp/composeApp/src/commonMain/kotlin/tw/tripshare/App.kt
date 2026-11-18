@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import tw.tripshare.data.TripRepository
+import tw.tripshare.screens.ImportScreen
 import tw.tripshare.screens.JoinScreen
 import tw.tripshare.screens.LocalSession
 import tw.tripshare.screens.Session
@@ -119,6 +120,7 @@ fun App() {
                         is Screen.ItemForm -> ItemFormScreen(screen.tripId, screen.itemId, screen.date)
                         is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
                         is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
+                        is Screen.Import -> ImportScreen(screen.tripId)
                     }
                 }
             }
