@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -114,7 +117,8 @@ fun ImportScreen(tripId: String) {
         var summary by remember { mutableStateOf("") }
         val ctx = ImportContext(data.trip.startDate, data.trip.endDate, data.trip.baseCurrency, data.members.map { it.name })
         val back: () -> Unit = { if (step == Step.Preview) step = Step.Paste else nav.pop() }
-        Page("從試算表匯入", onBack = back) {
+        val bar = remember { ImportBar() }
+        Page("從試算表匯入", onBack = back, bottom = if (step == Step.Preview) ({ ImportBarView(bar) }) else null) {
             when (step) {
                 Step.Paste -> {
                     LinkPart(linkState) { title, rows -> input = Input.Tab(title, rows); step = Step.Preview }
@@ -130,7 +134,7 @@ fun ImportScreen(tripId: String) {
                             is Input.Tab -> analyzeRows(i.rows, ctx, i.title)
                         }
                     }
-                    PreviewStep(data, ctx, result) { id, said ->
+                    PreviewStep(data, ctx, result, bar) { id, said ->
                         importId = id
                         summary = said
                         step = Step.Done
@@ -214,6 +218,43 @@ private fun PastePart(data: TripData, ctx: ImportContext, text: String, onText: 
 }
 
 /** Ticks per row, keyed like "e3" (expense 3) or "i0" (stop 0); absent means ticked. */
+/** What the pinned import button shows and does, set by the preview. */
+private class ImportBar {
+    var parts by mutableStateOf<List<String>>(emptyList())
+    var onImport by mutableStateOf<() -> Unit>({})
+}
+
+/**
+ * Pinned under the preview so the button is always in reach, however long
+ * the list: what is ticked, then a big button with a hand-drawn drop shadow.
+ */
+@Composable
+private fun ImportBarView(bar: ImportBar) {
+    val enabled = bar.parts.isNotEmpty()
+    Column(Modifier.fillMaxWidth().background(AppColors.paper)) {
+        Box(Modifier.fillMaxWidth().height(AppShape.border).background(AppColors.ink))
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Txt(
+                if (enabled) "已勾選：${bar.parts.joinToString("、")}" else "還沒勾選要匯入的資料",
+                size = 14, color = AppColors.faint, maxLines = 2,
+            )
+            Box(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                if (enabled) Box(Modifier.matchParentSize().offset(y = 4.dp).background(AppColors.ink, AppShape.pill))
+                Box(
+                    Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(AppShape.pill)
+                        .border(AppShape.border, if (enabled) AppColors.ink else AppColors.faint, AppShape.pill)
+                        .background(if (enabled) AppColors.coral else AppColors.paper, AppShape.pill)
+                        .clickable(enabled = enabled, role = Role.Button, onClick = bar.onImport)
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Txt("匯入", size = 20, bold = true, color = if (enabled) AppColors.ink else AppColors.faint)
+                }
+            }
+        }
+    }
+}
+
 private class Ticks {
     private val set = mutableStateMapOf<String, Boolean>()
     /** [default] is false for rows the trip already has. */
@@ -239,13 +280,14 @@ private class Existing(d: TripData) {
 private const val ALREADY = "已經有了，預設不匯入"
 
 @Composable
-private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onDone: (String, String) -> Unit) {
+private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, bar: ImportBar, onDone: (String, String) -> Unit) {
     val session = LocalSession.current
     val toasts = LocalToasts.current
     val repo = session.repo
     val base = data.trip.baseCurrency
 
     if (r.isEmpty) {
+        SideEffect { bar.parts = emptyList(); bar.onImport = {} }
         InkCard(Modifier.fillMaxWidth(), fill = AppColors.yamabuki) {
             Txt("沒有讀到可以匯入的資料", bold = true)
             Txt("請確認範圍有包含表頭（例如「項目、金額」或第一列是日期），或改用 AI 轉換。", size = 14)
@@ -447,12 +489,11 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
             Txt(why.joinToString("、") { "${it.key}（${it.value} 筆）" } + "。可以在上面的「名字對應」或「沒寫的時候」補上。", size = 14)
         }
     }
-    InkButton(
-        if (parts.isEmpty()) "沒有勾選要匯入的資料" else "匯入：${parts.joinToString("、")}",
-        { confirming = true },
-        Modifier.fillMaxWidth(),
-        enabled = parts.isNotEmpty(),
-    )
+    // The button itself lives in the bar pinned under the list.
+    SideEffect {
+        bar.parts = parts
+        bar.onImport = { confirming = true }
+    }
 
     if (confirming) {
         ConfirmDialog(

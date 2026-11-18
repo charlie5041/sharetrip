@@ -395,7 +395,7 @@ private val CLOCK = Regex("""(?<!\d)(\d{1,2}):(\d{2})(?!\d)""")
 
 /**
  * A day cell that is really a flight: a flight number and two airports,
- * like "17:15 桃園 - 21:30成田 MM628". Anything less stays a stop.
+ * like "08:10 桃園 - 12:20成田 XX628". Anything less stays a stop.
  */
 internal fun dayFlight(item: ItemRow): FlightRow? {
     val time = item.time ?: return null

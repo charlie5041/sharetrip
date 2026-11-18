@@ -157,7 +157,7 @@ fun guessCategory(text: String): ExpenseCategory {
         hasAny(t, listOf("纜車", "門票", "入場", "周遊", "pass", "樂園", "遊船", "遊覽船", "博物館", "美術館", "水族館", "展覽", "tour", "spa", "體驗")) -> ExpenseCategory.ticket
         hasAny(t, listOf("機票", "航班", "機場", "車", "計程", "taxi", "uber", "grab", "地鐵", "捷運", "機捷", "jr", "ktx", "srt", "新幹線", "巴士", "bus", "雙條", "etc", "快綫", "快線", "火車", "train", "渡輪", "加油", "停車", "高速", "交通", "西鐵", "rental", "suica", "icoca", "t-money", "悠遊")) -> ExpenseCategory.transport
         hasAny(t, listOf("票")) -> ExpenseCategory.ticket
-        // What was bought outweighs where: "Lawson * Coleman 外套", "Big Camera 麵包超人".
+        // What was bought outweighs where: "Lawson * 戶外品牌 外套", "Big Camera 玩具".
         hasAny(t, listOf("外套", "衣服", "上衣", "鞋", "褲", "帽", "襪", "手套", "雨傘", "玩具", "泡澡", "藥妝", "化妝", "伴手禮", "紀念品", "吊飾", "免稅", "代購",
             "big camera", "bic camera", "唐吉", "驚安", "donki", "uniqlo", "workman", "olive young", "outlet")) -> ExpenseCategory.shopping
         hasAny(t, listOf("餐", "食", "飯", "麵", "面", "咖啡", "cafe", "café", "coffee", "早午", "拉麵", "燒肉", "烤", "串", "湯", "甜", "麵包", "酒", "bar", "7-11", "711", "超商", "便利", "全家", "lawson", "小吃", "夜市", "壽司", "披薩", "pizza", "茶", "點心", "飲料", "雞", "菜", "奶", "冰", "米線", "香腸", "餅", "牛", "豬", "肉", "丼", "定食", "料理", "食堂", "超市", "水果", "shake shack", "早餐", "宵夜")) -> ExpenseCategory.food

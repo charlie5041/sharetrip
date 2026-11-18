@@ -24,7 +24,7 @@ service cloud.firestore {
     }
 
     // Crashes and 回報問題 from the app. Write-only: people cannot read
-    // each other's reports; Charlie reads them in the Firebase Console.
+    // each other's reports; the project owner reads them in the Firebase Console.
     match /errorReports/{id} {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(
