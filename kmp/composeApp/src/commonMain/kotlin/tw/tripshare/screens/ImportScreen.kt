@@ -283,6 +283,9 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
     val settled = r.expenses.map { it.settle(ctx, choices, noonOf) }
     val have = remember(r) { Existing(data) }
     val dupE = settled.map { s -> s is Settled.Ready && have.has(s.expense) }
+    val pendingE = settled.map { s -> s is Settled.Ready && s.pending }
+    // Ticked unless already in the trip or still without an amount.
+    val defE = settled.indices.map { !dupE[it] && !pendingE[it] }
     val dupI = r.items.map(have::has)
     val dupL = r.lodgings.map(have::has)
     val dupF = r.flights.map(have::has)
@@ -374,16 +377,16 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
                     listOfNotNull(row.date?.let(::shortDate), "$payer 付", who, s.expense.category.label).joinToString(" · ") + rateText
                 }
                 is Settled.Problem -> s.reason
-            }.let { if (dupE[i]) "$ALREADY · $it" else it }
-            val amount = row.money?.let { m -> "${m.number} ${row.currencyFor(choices)}" } ?: ""
+            }.let { if (pendingE[i]) "待補金額，預設不匯入 · $it" else it }.let { if (dupE[i]) "$ALREADY · $it" else it }
+            val amount = row.money?.takeUnless { pendingE[i] }?.let { m -> "${m.number} ${row.currencyFor(choices)}" } ?: if (pendingE[i]) "待補" else ""
             PickRow(
                 title = row.title.ifEmpty { "（第 ${row.line} 列）" },
                 subtitle = subtitle,
                 trailing = amount,
-                checked = s is Settled.Ready && ticks.on(key, !dupE[i]),
+                checked = s is Settled.Ready && ticks.on(key, defE[i]),
                 enabled = s is Settled.Ready,
                 warn = s is Settled.Problem,
-                onToggle = { ticks.toggle(key, !dupE[i]) },
+                onToggle = { ticks.toggle(key, defE[i]) },
             )
         }
     }
@@ -420,7 +423,7 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
     }
     SkippedList(r)
 
-    val expenses = settled.withIndex().filter { (i, s) -> s is Settled.Ready && ticks.on("e$i", !dupE[i]) }.map { (_, s) -> (s as Settled.Ready).expense }
+    val expenses = settled.withIndex().filter { (i, s) -> s is Settled.Ready && ticks.on("e$i", defE[i]) }.map { (_, s) -> (s as Settled.Ready).expense }
     val items = r.items.withIndex().filter { ticks.on("i${it.index}", !dupI[it.index]) }.map { it.value }
     val lodgings = r.lodgings.withIndex().filter { ticks.on("l${it.index}", !dupL[it.index]) }.map { it.value }
     val flights = r.flights.withIndex().filter { ticks.on("f${it.index}", !dupF[it.index]) }.map { it.value }

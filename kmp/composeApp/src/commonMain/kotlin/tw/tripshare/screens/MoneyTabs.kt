@@ -85,7 +85,12 @@ private fun ExpenseRow(data: TripData, e: Expense) {
                 Txt("${data.nameOf(e.payerId)} 付 · ${shortWhen(e.occurredAt)}", size = 13, color = AppColors.faint)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Txt(if (cur == null) "${e.amountMinor} ${e.currency}" else money(cur, e.amountMinor), bold = true)
+                if (e.amountMinor == 0L) {
+                    // Imported from a sheet row without an amount; easy to forget.
+                    Txt("待補金額", bold = true, color = AppColors.error)
+                } else {
+                    Txt(if (cur == null) "${e.amountMinor} ${e.currency}" else money(cur, e.amountMinor), bold = true)
+                }
                 if (e.currency != data.base.code) {
                     runCatching { baseTotal(e, data.base) }.getOrNull()?.let {
                         Txt("≈ ${money(data.base, it)}", size = 13, color = AppColors.faint)
