@@ -332,7 +332,25 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
         }
     }
 
+    /**
+     * Earlier imports whose documents are still tagged, with how many of each
+     * kind are left, so one can be taken back after leaving the import screen.
+     */
+    suspend fun pastImports(tripId: String): List<PastImport> {
+        val counts = mutableMapOf<String, MutableMap<String, Int>>()
+        for (name in listOf("expenses", "items", "lodgings", "flights", "checklist")) {
+            sub(tripId, name).get().documents.forEach { d ->
+                val id = d.fields["importId"] as? String ?: return@forEach
+                counts.getOrPut(id) { mutableMapOf() }.let { it[name] = (it[name] ?: 0) + 1 }
+            }
+        }
+        return counts.map { (id, c) -> PastImport(id, c) }
+    }
+
     /** Moves the trip's dates, e.g. so imported days fall inside it. */
     suspend fun updateTripDates(tripId: String, start: String, end: String) =
         trips.document(tripId).update("startDate" to start, "endDate" to end)
 }
+
+/** One earlier import: documents left per collection name. */
+data class PastImport(val id: String, val counts: Map<String, Int>)
