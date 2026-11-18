@@ -5,15 +5,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class DayFlightTest {
-    private val ctx = ImportContext("2026-11-04", "2026-11-11", "TWD", listOf("Charlie"))
+    private val ctx = ImportContext("2030-03-04", "2030-03-11", "TWD", listOf("Alex"))
 
     @Test fun dayCellsWithAFlightBecomeFlights() {
-        val text = "2026/11/4\t\t2026/11/5\t\n17:15\t桃園 - 21:30成田 MM628\t9:00\t河口湖\n20:55\t桃園 - 00:50(+1)羽田 MM860\t\t\n"
+        val text = "2030/3/4\t\t2030/3/5\t\n08:10\t桃園 - 12:20成田 XX628\t9:00\t河口湖\n19:40\t桃園 - 01:05(+1)羽田 XX860\t\t\n"
         val r = analyze(text, ctx)
         assertEquals(
             listOf(
-                FlightRow("MM628", "TPE", "NRT", "2026-11-04", "17:15", arriveDate = "2026-11-04", arriveTime = "21:30"),
-                FlightRow("MM860", "TPE", "HND", "2026-11-04", "20:55", arriveDate = "2026-11-05", arriveTime = "00:50"),
+                FlightRow("XX628", "TPE", "NRT", "2030-03-04", "08:10", arriveDate = "2030-03-04", arriveTime = "12:20"),
+                FlightRow("XX860", "TPE", "HND", "2030-03-04", "19:40", arriveDate = "2030-03-05", arriveTime = "01:05"),
             ),
             r.flights,
         )
@@ -21,19 +21,19 @@ class DayFlightTest {
     }
 
     @Test fun oneAirportStaysAStop() {
-        assertNull(dayFlight(ItemRow("2025-10-27", "14:05", "BKK 素萬那普機場")))
+        assertNull(dayFlight(ItemRow("2031-10-27", "14:05", "BKK 素萬那普機場")))
     }
 }
 
 class PendingAmountTest {
-    private val ctx = ImportContext("2026-11-04", "2026-11-11", "TWD", listOf("Charlie", "Sandy"))
+    private val ctx = ImportContext("2030-03-04", "2030-03-11", "TWD", listOf("Alex", "Bella"))
     private val choices = ExpenseChoices(
-        defaultCurrency = "JPY", defaultPayerId = "c", names = mapOf("charlie" to "c", "sandy" to "s"),
+        defaultCurrency = "JPY", defaultPayerId = "c", names = mapOf("alex" to "c", "bella" to "s"),
         rates = mapOf("JPY" to "0.21"), memberOrder = listOf("c", "s"),
     )
 
     @Test fun rowsWithoutAnAmountComeInAsZeroAndSettleToNothing() {
-        val r = analyze("項目\t金額\t支付人\n全家雨傘\t\tCharlie\n宵夜\t0\tSandy\n拉麵\t¥1,200\tCharlie\n", ctx)
+        val r = analyze("項目\t金額\t支付人\n便利商店雨傘\t\tAlex\n宵夜\t0\tBella\n拉麵\t¥1,200\tAlex\n", ctx)
         val settled = r.expenses.map { it.settle(ctx, choices) { 0L } }
         val ready = settled.map { it as tw.tripshare.core.sheet.Settled.Ready }
         assertEquals(listOf(true, true, false), ready.map { it.pending })
@@ -46,9 +46,9 @@ class PendingAmountTest {
 
 class CategoryTest {
     @Test fun whatWasBoughtBeatsTheShop() {
-        assertEquals(tw.tripshare.core.ExpenseCategory.shopping, guessCategory("Lawson * Coleman 外套"))
-        assertEquals(tw.tripshare.core.ExpenseCategory.shopping, guessCategory("Big Camera 麵包超人跟泡澡球"))
+        assertEquals(tw.tripshare.core.ExpenseCategory.shopping, guessCategory("Lawson * 戶外品牌 外套"))
+        assertEquals(tw.tripshare.core.ExpenseCategory.shopping, guessCategory("Big Camera 玩具跟泡澡球"))
         assertEquals(tw.tripshare.core.ExpenseCategory.food, guessCategory("Lawson"))
-        assertEquals(tw.tripshare.core.ExpenseCategory.food, guessCategory("Saison Bakery&Cafe"))
+        assertEquals(tw.tripshare.core.ExpenseCategory.food, guessCategory("Sample Bakery&Cafe"))
     }
 }
