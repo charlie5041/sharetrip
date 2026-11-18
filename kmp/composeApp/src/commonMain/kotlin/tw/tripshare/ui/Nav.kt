@@ -24,26 +24,39 @@ sealed interface Screen {
 
 /**
  * A plain back stack. Small enough not to need a navigation library, which
- * would add to the web download.
+ * would add to the web download. Each entry has its own [currentKey], so a
+ * screen's saved state (tab, picked day, scroll) waits for it underneath
+ * the screens pushed on top, and [onDrop] lets that state go once the
+ * entry leaves the stack.
  */
 class Navigator(start: Screen) {
-    private val stack = mutableStateListOf(start)
-    val current: Screen get() = stack.last()
+    private class Entry(val key: Int, val screen: Screen)
+
+    private var nextKey = 0
+    private val stack = mutableStateListOf(Entry(nextKey++, start))
+    val current: Screen get() = stack.last().screen
+    val currentKey: Int get() = stack.last().key
     val canGoBack: Boolean get() = stack.size > 1
 
-    fun push(s: Screen) { stack.add(s) }
+    /** Told the key of each entry that leaves the stack. */
+    var onDrop: (Int) -> Unit = {}
+
+    fun push(s: Screen) { stack.add(Entry(nextKey++, s)) }
 
     /** Swaps the top screen, e.g. the new-trip form for the trip it made. */
-    fun replace(s: Screen) { stack[stack.lastIndex] = s }
+    fun replace(s: Screen) {
+        onDrop(currentKey)
+        stack[stack.lastIndex] = Entry(nextKey++, s)
+    }
 
     /** False when already at the first screen, so the system may close the app. */
     fun pop(): Boolean {
         if (stack.size <= 1) return false
-        stack.removeAt(stack.lastIndex)
+        onDrop(stack.removeAt(stack.lastIndex).key)
         return true
     }
 
-    fun popToRoot() { while (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    fun popToRoot() { while (stack.size > 1) pop() }
 }
 
 val LocalNav = staticCompositionLocalOf<Navigator> { error("No navigator") }

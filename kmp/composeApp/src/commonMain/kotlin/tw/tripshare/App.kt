@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.gitlive.firebase.Firebase
@@ -106,21 +107,26 @@ fun App() {
             } else {
                 // A new navigator per account, so nothing from another identity survives.
                 val nav = remember(s.repo.uid) { Navigator(Screen.TripList) }
+                // Keeps each screen's rememberSaveable state while others sit on top of it.
+                val saved = rememberSaveableStateHolder()
+                remember(nav, saved) { nav.onDrop = { saved.removeState(it) } }
                 DisposableEffect(nav) {
                     BackPress.handler = nav::pop
                     onDispose { BackPress.handler = null }
                 }
                 CompositionLocalProvider(LocalSession provides s, LocalNav provides nav) {
-                    when (val screen = nav.current) {
-                        Screen.TripList -> TripListScreen()
-                        Screen.NewTrip -> TripFormScreen()
-                        Screen.Join -> JoinScreen()
-                        is Screen.TripView -> TripScreen(screen.tripId)
-                        is Screen.ExpenseForm -> ExpenseFormScreen(screen.tripId, screen.expenseId)
-                        is Screen.ItemForm -> ItemFormScreen(screen.tripId, screen.itemId, screen.date)
-                        is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
-                        is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
-                        is Screen.Import -> ImportScreen(screen.tripId)
+                    saved.SaveableStateProvider(nav.currentKey) {
+                        when (val screen = nav.current) {
+                            Screen.TripList -> TripListScreen()
+                            Screen.NewTrip -> TripFormScreen()
+                            Screen.Join -> JoinScreen()
+                            is Screen.TripView -> TripScreen(screen.tripId)
+                            is Screen.ExpenseForm -> ExpenseFormScreen(screen.tripId, screen.expenseId)
+                            is Screen.ItemForm -> ItemFormScreen(screen.tripId, screen.itemId, screen.date)
+                            is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
+                            is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
+                            is Screen.Import -> ImportScreen(screen.tripId)
+                        }
                     }
                 }
             }
