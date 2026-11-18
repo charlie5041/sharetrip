@@ -18,7 +18,7 @@ import tw.tripshare.currentActivity
  * can't find its way back to the app on some phones, which is why the
  * Flutter app used the system picker too.
  */
-private suspend fun googleIdToken(): String {
+private suspend fun googleIdToken(): GoogleIdTokenCredential {
     val activity = currentActivity?.get() ?: error("畫面還沒準備好")
     val option = GetSignInWithGoogleOption.Builder(GOOGLE_WEB_CLIENT_ID).build()
     val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
@@ -26,7 +26,7 @@ private suspend fun googleIdToken(): String {
     if (credential !is CustomCredential || credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
         error("Google 沒有回傳登入憑證")
     }
-    return GoogleIdTokenCredential.createFrom(credential.data).idToken
+    return GoogleIdTokenCredential.createFrom(credential.data)
 }
 
 private suspend fun attempt(step: suspend () -> Unit): GoogleResult = try {
@@ -42,13 +42,26 @@ private suspend fun attempt(step: suspend () -> Unit): GoogleResult = try {
     GoogleResult.Failed("Google 登入失敗（${e.message ?: e::class.simpleName}）")
 }
 
+private suspend fun signInWith(token: String) = attempt {
+    Firebase.auth.signInWithCredential(GoogleAuthProvider.credential(token, null))
+}
+
 actual fun platformGoogleLink(): suspend () -> GoogleResult = {
-    attempt {
+    var picked: GoogleIdTokenCredential? = null
+    val result = attempt {
         val user = Firebase.auth.currentUser ?: error("還沒登入")
-        user.linkWithCredential(GoogleAuthProvider.credential(googleIdToken(), null))
+        val google = googleIdToken().also { picked = it }
+        user.linkWithCredential(GoogleAuthProvider.credential(google.idToken, null))
+    }
+    val google = picked
+    // The failed link didn't use up the token, so switching can reuse it.
+    if (result is GoogleResult.InUse && google != null) {
+        GoogleResult.InUse(google.id.ifBlank { null }) { signInWith(google.idToken) }
+    } else {
+        result
     }
 }
 
 actual fun platformGoogleSignIn(): suspend () -> GoogleResult = {
-    attempt { Firebase.auth.signInWithCredential(GoogleAuthProvider.credential(googleIdToken(), null)) }
+    attempt { Firebase.auth.signInWithCredential(GoogleAuthProvider.credential(googleIdToken().idToken, null)) }
 }

@@ -7,8 +7,12 @@ import dev.gitlive.firebase.auth.auth
 sealed interface GoogleResult {
     data object Ok : GoogleResult
     data object Cancelled : GoogleResult
-    /** That Google account already backs another 同遊 identity. */
-    data class InUse(val email: String?) : GoogleResult
+    /**
+     * That Google account already backs another 同遊 identity. [switchNow]
+     * signs in as it with the account just picked, so the person isn't asked
+     * to pick it a second time; null when the platform can't reuse it.
+     */
+    data class InUse(val email: String?, val switchNow: (suspend () -> GoogleResult)? = null) : GoogleResult
     data class Failed(val message: String) : GoogleResult
 }
 
