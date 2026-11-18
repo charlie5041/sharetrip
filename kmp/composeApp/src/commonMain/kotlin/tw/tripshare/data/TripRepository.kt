@@ -57,13 +57,18 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
     // ---- Trips -------------------------------------------------------------
 
     fun watchMyTrips(): Flow<List<Trip>> = trips.where { "memberUids" contains uid }.snapshots.map { s ->
-        s.documents.mapNotNull { runCatching { Trip.fromMap(it.id, it.fields) }.getOrNull() }
+        s.documents.mapNotNull { runCatching { it.trip() }.getOrNull() }
             .sortedByDescending { it.startDate }
     }
 
     /** Null once the trip is gone (its owner dissolved it). */
     fun watchTrip(tripId: String): Flow<Trip?> =
-        trips.document(tripId).snapshots.map { d -> if (d.exists) Trip.fromMap(d.id, d.fields) else null }
+        trips.document(tripId).snapshots.map { d -> if (d.exists) d.trip() else null }
+
+    private fun DocumentSnapshot.trip(): Trip {
+        val seen = runCatching { get<Timestamp?>("ownerSeenAt") }.getOrNull()
+        return Trip.fromMap(id, fields).copy(ownerSeenAt = seen?.let { it.seconds * 1000 + it.nanoseconds / 1_000_000 })
+    }
 
     /** A fresh trip id, so a screen can open the trip before the write reaches the server. */
     fun newTripId(): String = trips.document.id
@@ -89,6 +94,7 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
             mapOf(
                 "name" to name.trim(), "baseCurrency" to baseCurrency, "startDate" to startDate,
                 "endDate" to endDate, "ownerUid" to uid, "memberUids" to listOf(uid), "createdAt" to now,
+                "ownerSeenAt" to FieldValue.serverTimestamp,
             ),
         )
         batch.set(members(id).document(uid), mapOf("name" to nickname, "uid" to uid, "order" to 0L, "joinedAt" to now))
@@ -131,6 +137,38 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
             .update(trips.document(tripId), "memberUids" to FieldValue.arrayRemove(u))
             .commit()
     }
+
+    /**
+     * Leaves the trip. Not for the owner, who hands the trip over first.
+     * The name stays on the list as an open place, with its expenses, so
+     * balances don't change and the person can take it back with an invite.
+     */
+    suspend fun leaveTrip(tripId: String, me: Member) {
+        db.batch()
+            .update(members(tripId).document(me.id), "uid" to null)
+            .update(trips.document(tripId), "memberUids" to FieldValue.arrayRemove(uid))
+            .commit()
+    }
+
+    /** Moves this device from its place [from] to the open place [to], e.g. back to the name it created the trip as. */
+    suspend fun moveToPlace(tripId: String, from: Member?, to: Member) {
+        val batch = db.batch()
+        from?.let { batch.update(members(tripId).document(it.id), "uid" to null) }
+        batch.update(members(tripId).document(to.id), "uid" to uid, "joinedAt" to nowMillis())
+        batch.commit()
+    }
+
+    /** Hands the trip to another joined member. Owner only. */
+    suspend fun transferOwner(tripId: String, toUid: String) =
+        trips.document(tripId).update("ownerUid" to toUid, "ownerSeenAt" to FieldValue.serverTimestamp)
+
+    /** Takes over a trip whose owner hasn't opened it for two weeks (or lost their account). */
+    suspend fun claimOwner(tripId: String) =
+        trips.document(tripId).update("ownerUid" to uid, "ownerSeenAt" to FieldValue.serverTimestamp)
+
+    /** The owner's app marks that the owner is still around, so nobody takes the trip over. */
+    suspend fun stampOwnerSeen(tripId: String) =
+        trips.document(tripId).update("ownerSeenAt" to FieldValue.serverTimestamp)
 
     /** Deletes the trip and everything in it. Owner only. */
     suspend fun dissolveTrip(tripId: String) {

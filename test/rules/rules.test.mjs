@@ -134,7 +134,7 @@ describe('the member list', () => {
   test('members rename only themselves; the owner renames anyone', async () => {
     await assertSucceeds(updateDoc(doc(db('bob'), 'trips/t1/members/bob'), { name: 'B' }));
     await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/p1'), { name: 'X' }));
-    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/bob'), { uid: null }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/bob'), { uid: 'carol' }));
     await assertSucceeds(updateDoc(doc(db('alice'), 'trips/t1/members/p1'), { name: '奶奶' }));
   });
 
@@ -143,8 +143,82 @@ describe('the member list', () => {
     await assertFails(updateDoc(doc(db('alice'), 'trips/t1/members/p1'), { uid: 'mallory' }));
   });
 
-  test('members cannot take an open place for themselves', async () => {
-    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/p1'), { uid: 'bob' }));
+  test('a member moves to an open place, never a taken one', async () => {
+    const f = db('bob');
+    const b = writeBatch(f);
+    b.update(doc(f, 'trips/t1/members/bob'), { uid: null });
+    b.update(doc(f, 'trips/t1/members/p1'), { uid: 'bob', joinedAt: 2 });
+    await assertSucceeds(b.commit());
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/alice'), { uid: 'bob' }));
+    await assertFails(updateDoc(doc(db('carol'), 'trips/t1/members/bob'), { uid: 'carol' }));
+  });
+
+  test('a member lets go of only their own place', async () => {
+    await assertSucceeds(updateDoc(doc(db('bob'), 'trips/t1/members/bob'), { uid: null }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1/members/alice'), { uid: null }));
+  });
+});
+
+describe('leaving and handing over', () => {
+  function leave(uid) {
+    const f = db(uid);
+    const b = writeBatch(f);
+    b.update(doc(f, `trips/t1/members/${uid}`), { uid: null });
+    b.update(doc(f, 'trips/t1'), { memberUids: arrayRemove(uid) });
+    return b.commit();
+  }
+
+  test('a member leaves; their name stays as an open place', async () => {
+    await seedTrip(['alice', 'bob', 'carol']);
+    await assertSucceeds(leave('bob'));
+    await assertFails(getDoc(doc(db('bob'), 'trips/t1')));
+    const left = await getDoc(doc(db('alice'), 'trips/t1/members/bob'));
+    if (left.data().uid !== null || left.data().name !== 'bob') throw new Error('place not kept');
+  });
+
+  test('leaving takes out only yourself, and the owner cannot leave', async () => {
+    await seedTrip(['alice', 'bob', 'carol']);
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1'),
+      { memberUids: ['alice'] }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1'),
+      { memberUids: arrayRemove('bob'), name: 'x' }));
+    await assertFails(leave('alice'));
+  });
+
+  test('the owner hands the trip to a member, not an outsider', async () => {
+    await seedTrip(['alice', 'bob']);
+    await assertFails(updateDoc(doc(db('alice'), 'trips/t1'), { ownerUid: 'mallory' }));
+    await assertSucceeds(updateDoc(doc(db('alice'), 'trips/t1'),
+      { ownerUid: 'bob', ownerSeenAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(db('alice'), 'trips/t1'), { ownerUid: 'alice' }));
+    await assertSucceeds(leave('alice'));
+  });
+
+  test('only the owner stamps ownerSeenAt, and only with now', async () => {
+    await seedTrip(['alice', 'bob']);
+    await assertSucceeds(updateDoc(doc(db('alice'), 'trips/t1'), { ownerSeenAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(db('alice'), 'trips/t1'), { ownerSeenAt: inHours(-24 * 30) }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1'), { ownerSeenAt: inHours(-24 * 30) }));
+  });
+
+  test('a member takes over an owner who never stamped the trip', async () => {
+    await seedTrip(['alice', 'bob']);
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1'),
+      { ownerUid: 'bob', ownerSeenAt: inHours(0) }));
+    await assertFails(updateDoc(doc(db('carol'), 'trips/t1'),
+      { ownerUid: 'carol', ownerSeenAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(db('bob'), 'trips/t1'),
+      { ownerUid: 'bob', ownerSeenAt: serverTimestamp() }));
+  });
+
+  test('a member takes over only after 14 days without the owner', async () => {
+    await seedTrip(['alice', 'bob']);
+    await seed((f) => updateDoc(doc(f, 'trips/t1'), { ownerSeenAt: inHours(-24 * 13) }));
+    await assertFails(updateDoc(doc(db('bob'), 'trips/t1'),
+      { ownerUid: 'bob', ownerSeenAt: serverTimestamp() }));
+    await seed((f) => updateDoc(doc(f, 'trips/t1'), { ownerSeenAt: inHours(-24 * 15) }));
+    await assertSucceeds(updateDoc(doc(db('bob'), 'trips/t1'),
+      { ownerUid: 'bob', ownerSeenAt: serverTimestamp() }));
   });
 });
 

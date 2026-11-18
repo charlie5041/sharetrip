@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import tw.tripshare.core.ChecklistEntry
 import tw.tripshare.core.Currency
 import tw.tripshare.core.Expense
@@ -30,6 +32,7 @@ import tw.tripshare.core.Lodging
 import tw.tripshare.core.Member
 import tw.tripshare.core.Settlement
 import tw.tripshare.core.Trip
+import tw.tripshare.nowMillis
 import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.AppShape
 import tw.tripshare.ui.CenterMessage
@@ -105,6 +108,8 @@ fun WithTrip(tripId: String, content: @Composable (TripData) -> Unit) {
     }
 }
 
+private const val STAMP_EVERY_MILLIS = 24L * 3600 * 1000
+
 private val TABS = listOf("總覽", "行程", "記帳", "結算", "清單", "成員")
 
 @Composable
@@ -112,6 +117,15 @@ fun TripScreen(tripId: String) {
     val nav = LocalNav.current
     var tab by rememberSaveable(tripId) { mutableIntStateOf(0) }
     WithTrip(tripId) { data ->
+        // The owner's visit tells everyone the owner is still around (see Trip.ownerAbsent).
+        val repo = LocalSession.current.repo
+        val background = LocalSession.current.background
+        LaunchedEffect(tripId, data.isOwner) {
+            val seen = data.trip.ownerSeenAt
+            if (data.isOwner && (seen == null || nowMillis() - seen > STAMP_EVERY_MILLIS)) {
+                background.launch { runCatching { repo.stampOwnerSeen(tripId) } }
+            }
+        }
         Page(data.trip.name, onBack = { nav.pop() }, bottom = { TabBar(tab) { tab = it } }) {
             when (TABS[tab]) {
                 "總覽" -> OverviewTab(data)
