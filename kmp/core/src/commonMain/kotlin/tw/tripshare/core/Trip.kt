@@ -16,7 +16,15 @@ data class Trip(
     /** Signed-in members, for the security rules. */
     val memberUids: List<String>,
     val createdAt: Long,
+    /**
+     * When the owner's app last opened the trip, in millis; null if it never
+     * has. Read separately because it's a server timestamp, not a number.
+     */
+    val ownerSeenAt: Long? = null,
 ) {
+    /** Any member may take over once the owner hasn't been seen for this long (matches firestore.rules). */
+    fun ownerAbsent(now: Long): Boolean = ownerSeenAt == null || now - ownerSeenAt > OWNER_ABSENT_MILLIS
+
     fun toMap(): Doc = mapOf(
         "name" to name,
         "baseCurrency" to baseCurrency,
@@ -28,6 +36,8 @@ data class Trip(
     )
 
     companion object {
+        const val OWNER_ABSENT_MILLIS = 14L * 24 * 3600 * 1000
+
         fun fromMap(id: String, m: Doc) = Trip(
             id = id,
             name = m.str("name"),
