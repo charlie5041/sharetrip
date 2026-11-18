@@ -154,7 +154,7 @@ private fun Step(n: Int, text: String) {
 }
 
 @Composable
-private fun CopyLink(link: String) {
+internal fun CopyLink(link: String) {
     var copied by remember { mutableStateOf(false) }
     InkButton(if (copied) "已複製 $link" else "複製網址", { copyToClipboard(link); copied = true }, Modifier.fillMaxWidth(), fill = AppColors.paper)
 }

@@ -37,6 +37,8 @@ private fun outcome(started: Promise<JsAny?>): suspend () -> GoogleResult {
                     GoogleResult.InUse(errorEmail(error).ifEmpty { null }, switchNow)
                 }
                 "popup-closed-by-user", "cancelled-popup-request" -> GoogleResult.Cancelled
+                // Already linked: nothing left to do.
+                "provider-already-linked" -> GoogleResult.Ok
                 else -> GoogleResult.Failed(googleErrorText(code, errorMessage(error)))
             }
         }

@@ -37,7 +37,14 @@ before(async () => {
 after(() => env.cleanup());
 beforeEach(() => env.clearFirestore());
 
-const db = (uid) => env.authenticatedContext(uid).firestore();
+// Every person signs in with Google; an anonymous account (from before
+// that) has no identities until the app links one.
+const db = (uid) => env.authenticatedContext(uid, {
+  firebase: { sign_in_provider: 'google.com', identities: { 'google.com': [`g-${uid}`] } },
+}).firestore();
+const anonymousAccount = (uid) => env.authenticatedContext(uid, {
+  firebase: { sign_in_provider: 'anonymous', identities: {} },
+}).firestore();
 const anon = () => env.unauthenticatedContext().firestore();
 
 const trip = (owner, members = [owner]) => ({
@@ -365,5 +372,17 @@ describe('error reports', () => {
     await assertFails(getDoc(doc(db('alice'), 'errorReports/r4')));
     await assertFails(updateDoc(doc(db('alice'), 'errorReports/r4'), { message: 'x' }));
     await assertFails(deleteDoc(doc(db('alice'), 'errorReports/r4')));
+  });
+});
+
+describe('anonymous accounts', () => {
+  test('are refused everywhere until linked to Google', async () => {
+    await seedTrip(['alice']);
+    await assertFails(getDoc(doc(anonymousAccount('alice'), 'trips/t1')));
+    await assertFails(getDoc(doc(anonymousAccount('alice'), 'trips/t1/expenses/e1')));
+    await assertFails(setDoc(doc(anonymousAccount('carol'), 'trips/t2'), trip('carol')));
+    await assertFails(setDoc(doc(anonymousAccount('carol'), 'users/carol'), { nickname: 'C' }));
+    // Linking keeps the uid, so the same person reads the trip again.
+    await assertSucceeds(getDoc(doc(db('alice'), 'trips/t1')));
   });
 });
