@@ -50,6 +50,21 @@ actual suspend fun httpGetText(url: String): String? = withContext(Dispatchers.I
     }.getOrNull()
 }
 
+actual suspend fun httpGetResponse(url: String): Pair<Int, String>? = withContext(Dispatchers.IO) {
+    runCatching {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 10000
+        conn.readTimeout = 15000
+        try {
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            code to (stream?.bufferedReader()?.use { it.readText() } ?: "")
+        } finally {
+            conn.disconnect()
+        }
+    }.getOrNull()
+}
+
 private val random = SecureRandom()
 
 actual fun secureRandomBytes(n: Int): ByteArray = ByteArray(n).also(random::nextBytes)

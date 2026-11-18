@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,12 @@ import tw.tripshare.core.sheet.RateSource
 import tw.tripshare.core.sheet.Settled
 import tw.tripshare.core.sheet.aiPrompt
 import tw.tripshare.core.sheet.analyze
+import tw.tripshare.core.sheet.analyzeRows
+import tw.tripshare.core.sheet.SheetError
+import tw.tripshare.core.sheet.SheetInfo
+import tw.tripshare.core.sheet.SheetRef
+import tw.tripshare.core.sheet.parseSheetLink
+import tw.tripshare.data.GoogleSheets
 import tw.tripshare.core.sheet.autoMatch
 import tw.tripshare.core.sheet.currencyFor
 import tw.tripshare.core.sheet.mentionedNames
@@ -74,23 +81,53 @@ private enum class Step { Paste, Preview, Done }
  * chat's tables), check what was read, then write it all in one go, with
  * a way to take the whole import back.
  */
+/** What the preview reads: pasted text, or one tab read from a shared link. */
+private sealed interface Input {
+    data class Text(val text: String) : Input
+    data class Tab(val title: String, val rows: List<List<String>>) : Input
+}
+
+/** The shared-link part of the first step, kept while going back and forth. */
+private class LinkState {
+    var link by mutableStateOf("")
+    var ref by mutableStateOf<SheetRef?>(null)
+    var info by mutableStateOf<SheetInfo?>(null)
+    var error by mutableStateOf<String?>(null)
+    var busy by mutableStateOf(false)
+}
+
 @Composable
 fun ImportScreen(tripId: String) {
     val nav = LocalNav.current
     WithTrip(tripId) { data ->
         var step by remember { mutableStateOf(Step.Paste) }
         var text by remember { mutableStateOf("") }
+        var input by remember { mutableStateOf<Input?>(null) }
+        val linkState = remember { LinkState() }
         var importId by remember { mutableStateOf<String?>(null) }
         var summary by remember { mutableStateOf("") }
         val ctx = ImportContext(data.trip.startDate, data.trip.endDate, data.trip.baseCurrency, data.members.map { it.name })
         val back: () -> Unit = { if (step == Step.Preview) step = Step.Paste else nav.pop() }
         Page("從試算表匯入", onBack = back) {
             when (step) {
-                Step.Paste -> PasteStep(data, ctx, text, { text = it }) { step = Step.Preview }
-                Step.Preview -> PreviewStep(data, ctx, remember(text, ctx) { analyze(text, ctx) }) { id, said ->
-                    importId = id
-                    summary = said
-                    step = Step.Done
+                Step.Paste -> {
+                    LinkPart(linkState) { title, rows -> input = Input.Tab(title, rows); step = Step.Preview }
+                    PastePart(data, ctx, text, { text = it }) { input = Input.Text(text); step = Step.Preview }
+                }
+                Step.Preview -> {
+                    val i = input!!
+                    if (i is Input.Tab) Txt("分頁「${i.title}」", size = 14, color = AppColors.faint)
+                    val result = remember(i, ctx) {
+                        when (i) {
+                            is Input.Text -> analyze(i.text, ctx)
+                            is Input.Tab -> analyzeRows(i.rows, ctx, i.title)
+                        }
+                    }
+                    PreviewStep(data, ctx, result) { id, said ->
+                        importId = id
+                        summary = said
+                        step = Step.Done
+                    }
                 }
                 Step.Done -> DoneStep(data, importId!!, summary)
             }
@@ -98,13 +135,59 @@ fun ImportScreen(tripId: String) {
     }
 }
 
+/** Paste a sheet's link, pick a tab. */
 @Composable
-private fun PasteStep(data: TripData, ctx: ImportContext, text: String, onText: (String) -> Unit, onNext: () -> Unit) {
+private fun LinkPart(st: LinkState, onTab: (String, List<List<String>>) -> Unit) {
+    val scope = rememberCoroutineScope()
+    fun run(block: suspend () -> Unit) {
+        if (st.busy) return
+        st.busy = true
+        st.error = null
+        scope.launch {
+            try { block() } catch (e: SheetError) { st.error = e.message } catch (e: Exception) { st.error = "讀取失敗：${e.message}" }
+            st.busy = false
+        }
+    }
+    SectionTitle("用試算表連結")
+    InkCard(Modifier.fillMaxWidth(), fill = AppColors.mizu) {
+        Txt("貼上 Google 試算表的連結，選一個分頁就能匯入。", size = 15)
+        Txt("試算表要先按「共用」，把一般存取權設成「知道連結的任何人」可以檢視。", size = 14, color = AppColors.faint)
+    }
+    InkField(st.link, { st.link = it; st.error = null }, "試算表連結", maxLength = 500)
+    InkButton(if (st.busy && st.info == null) "讀取中…" else "讀取分頁", {
+        val ref = parseSheetLink(st.link)
+        if (ref == null) { st.error = "這看起來不是 Google 試算表的連結"; return@InkButton }
+        run {
+            st.info = null
+            st.info = GoogleSheets.tabs(ref.id)
+            st.ref = ref
+        }
+    }, Modifier.fillMaxWidth(), enabled = st.link.isNotBlank() && !st.busy)
+    st.error?.let { Txt(it, size = 14, color = AppColors.error) }
+    val info = st.info
+    val ref = st.ref
+    if (info != null && ref != null) {
+        Txt("「${info.title}」有 ${info.tabs.size} 個分頁，選一個：", size = 14, color = AppColors.faint)
+        val linked = info.tabs.firstOrNull { it.gid == ref.gid }
+        (listOfNotNull(linked) + info.tabs.filter { it != linked }).forEach { tab ->
+            InkCard(Modifier.fillMaxWidth(), fill = if (tab == linked) AppColors.yamabuki else AppColors.paper, onClick = {
+                run { onTab(tab.title, GoogleSheets.values(ref.id, tab.title)) }
+            }) {
+                Txt(tab.title, bold = true)
+                if (tab == linked) Txt("你貼的連結開的是這個分頁", size = 13, color = AppColors.faint)
+            }
+        }
+        if (st.busy) Txt("讀取中…", size = 14, color = AppColors.faint)
+    }
+}
+
+@Composable
+private fun PastePart(data: TripData, ctx: ImportContext, text: String, onText: (String) -> Unit, onNext: () -> Unit) {
     val toasts = LocalToasts.current
     var showHeaders by remember { mutableStateOf(false) }
-    InkCard(Modifier.fillMaxWidth(), fill = AppColors.mizu) {
-        Txt("1. 在 Google 試算表或 Excel 選取要匯入的範圍，複製", size = 15)
-        Txt("2. 貼在下面，按「讀取」", size = 15)
+    SectionTitle("或複製貼上")
+    InkCard(Modifier.fillMaxWidth()) {
+        Txt("在 Google 試算表或 Excel 選取範圍、複製，貼在下面按「讀取」。Excel 檔或不想公開的試算表用這個。", size = 15)
         Txt("可以一次選花費表加行程，總計、平均這類彙總會自動略過。匯入前會先讓你看過。", size = 14, color = AppColors.faint)
     }
     InkField(text, onText, "貼上的內容", maxLength = 200_000, lines = 6)

@@ -52,6 +52,9 @@ internal class TravelOut {
 }
 
 private val LODGING_LABELS = listOf("住宿", "飯店", "酒店", "旅館", "hotel", "🛌")
+private val ROW_LABELS = listOf("行程", "美食", "採買", "購物", "餐廳", "景點", "交通", "備註")
+private fun isLabelWord(s: String) = s.length in 1..6 && s.none { it.isDigit() } &&
+    (isLodgingLabel(s) || ROW_LABELS.any { s.contains(it) })
 private fun isLodgingLabel(s: String) = s.isNotEmpty() && LODGING_LABELS.any { s.lowercase().contains(it) }
 
 private const val MAX_TITLE = 60
@@ -97,10 +100,34 @@ internal fun findDayColumns(s: Section, ctx: ImportContext, out: TravelOut): Boo
         val labelCol = dateCols.first().first - 1
         var label = ""
         val lodgingLines = groups.associate { it.third to mutableListOf<String>() }
+        val gridCols = (maxOf(labelCol, 0)..groups.last().let { it.first + it.second - 1 })
+        var blankRun = 0
+        var afterLodging = false
         for (row in r + 1 until s.rows.size) {
-            if (labelCol >= 0) s.cell(row, labelCol).takeIf { it.isNotEmpty() }?.let { label = it }
+            if (gridCols.all { s.cell(row, it).isEmpty() }) {
+                blankRun++
+                if (isLodgingLabel(label)) { label = ""; afterLodging = true }
+                continue
+            }
+            // A row label sits left of the days, or in the first day's time column.
+            val g0 = groups.first()
+            val inTimeCol = g0.second >= 2 && isLabelWord(s.cell(row, g0.first))
+            val rowLabel = when {
+                labelCol >= 0 -> s.cell(row, labelCol)
+                inTimeCol -> s.cell(row, g0.first)
+                else -> ""
+            }
+            if (rowLabel.isNotEmpty()) {
+                label = rowLabel
+                afterLodging = false
+            } else if (afterLodging) {
+                break // Stays come last; what follows is another table.
+            } else if (blankRun >= 3 && groups.none { (c, w, _) -> (c until c + w).any { splitTime(s.cell(row, it)).time != null } }) {
+                break // A long gap, then untimed rows: another table.
+            }
+            blankRun = 0
             for ((c, w, date) in groups) {
-                val cells = (c until c + w).map { s.cell(row, it) }
+                val cells = (c until c + w).map { if (inTimeCol && it == g0.first) "" else s.cell(row, it) }
                 if (isLodgingLabel(label)) {
                     cells.filter { it.isNotEmpty() }.forEach { lodgingLines.getValue(date) += it }
                     continue
@@ -136,17 +163,22 @@ private fun dayCell(date: String, timeCell: String, text: String): ItemRow? {
     return ItemRow(date, time, title, note = joinNotes(timeNote, note), transport = guessTransport(text))
 }
 
-/** Lodging cells per night → stays, merging nights at the same place. */
-private fun mergeNights(dates: List<String>, lines: Map<String, List<String>>): List<LodgingRow> {
+/**
+ * Lodging cells per night → stays, merging nights at the same place. With
+ * several cells a night (模板: city, hotel, room), the second is the hotel;
+ * a single cell starts with the hotel's name.
+ */
+private fun mergeNights(dates: List<String>, cells: Map<String, List<String>>): List<LodgingRow> {
     data class Night(val date: String, val name: String, val note: String?)
     val nights = dates.mapNotNull { d ->
-        val l = lines[d].orEmpty().flatMap { it.lines() }.map { it.trim() }.filter { it.isNotEmpty() }
-        when {
-            l.isEmpty() -> null
-            l.size == 1 && l[0].contains("家") -> null // "溫暖的家": home, not a stay.
-            l.size == 1 -> Night(d, l[0], null)
-            else -> Night(d, l[1], (listOf(l[0]) + l.drop(2)).joinToString(" · "))
-        }
+        val c = cells[d].orEmpty().map { it.trim() }.filter { it.isNotEmpty() }
+        if (c.isEmpty()) return@mapNotNull null
+        val nameCell = if (c.size >= 2) 1 else 0
+        val name = c[nameCell].lines().first().trim()
+        val rest = c.flatMapIndexed { i, cell -> if (i == nameCell) cell.lines().drop(1) else cell.lines() }
+            .map { it.trim() }.filter { it.isNotEmpty() }
+        if (c.size == 1 && NOT_A_STAY.any { name.contains(it) }) return@mapNotNull null
+        Night(d, name, rest.joinToString(" · ").ifEmpty { null })
     }
     val out = mutableListOf<LodgingRow>()
     for (n in nights) {
@@ -159,6 +191,9 @@ private fun mergeNights(dates: List<String>, lines: Map<String, List<String>>): 
     }
     return out
 }
+
+/** "溫暖的家" (home) or a night on the plane: not a stay to book. */
+private val NOT_A_STAY = listOf("家", "飛機", "機上", "夜車")
 
 private fun nextDay(d: String) = ymd(parseYmd(d).plus(DatePeriod(days = 1)))
 

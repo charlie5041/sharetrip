@@ -41,6 +41,14 @@ actual fun localMillis(dt: LocalDateTime): Long =
 
 actual suspend fun httpGetText(url: String): String? = runCatching { jsFetchText(url).await<JsString?>()?.toString() }.getOrNull()
 
+private fun jsFetchResponse(url: String): Promise<JsString?> =
+    js("fetch(url).then(async r => r.status + '\\n' + await r.text()).catch(() => null)")
+
+actual suspend fun httpGetResponse(url: String): Pair<Int, String>? = runCatching {
+    val s = jsFetchResponse(url).await<JsString?>()?.toString() ?: return@runCatching null
+    s.substringBefore('\n').toInt() to s.substringAfter('\n')
+}.getOrNull()
+
 actual fun secureRandomBytes(n: Int): ByteArray = ByteArray(n) { jsRandomByte().toByte() }
 
 actual fun copyToClipboard(text: String) = jsCopy(text)

@@ -152,12 +152,13 @@ private fun hasAny(text: String, words: List<String>) = words.any { text.contain
 fun guessCategory(text: String): ExpenseCategory {
     val t = text.lowercase()
     return when {
+        Regex(""".+到.+""").matches(t.trim()) && !hasAny(t, listOf("門票", "住宿")) -> ExpenseCategory.transport
         hasAny(t, listOf("住宿", "飯店", "酒店", "旅館", "民宿", "旅店", "hotel", "inn", "hostel", "airbnb", "韓屋", "resort", "residence", "check in", "(bk)", "bk ", "booking", "agoda", "(trip)")) -> ExpenseCategory.lodging
         hasAny(t, listOf("纜車", "門票", "入場", "周遊", "pass", "樂園", "遊船", "遊覽船", "博物館", "美術館", "水族館", "展覽", "tour", "spa", "體驗")) -> ExpenseCategory.ticket
-        hasAny(t, listOf("機票", "航班", "機場", "車", "計程", "taxi", "uber", "grab", "地鐵", "捷運", "機捷", "jr", "ktx", "srt", "新幹線", "巴士", "bus", "火車", "train", "渡輪", "加油", "停車", "高速", "交通", "西鐵", "rental", "suica", "icoca", "t-money", "悠遊")) -> ExpenseCategory.transport
+        hasAny(t, listOf("機票", "航班", "機場", "車", "計程", "taxi", "uber", "grab", "地鐵", "捷運", "機捷", "jr", "ktx", "srt", "新幹線", "巴士", "bus", "雙條", "etc", "快綫", "快線", "火車", "train", "渡輪", "加油", "停車", "高速", "交通", "西鐵", "rental", "suica", "icoca", "t-money", "悠遊")) -> ExpenseCategory.transport
         hasAny(t, listOf("票")) -> ExpenseCategory.ticket
-        hasAny(t, listOf("餐", "食", "飯", "麵", "面", "咖啡", "cafe", "café", "coffee", "早午", "拉麵", "燒肉", "烤", "串", "湯", "甜", "麵包", "酒", "bar", "7-11", "711", "超商", "便利", "全家", "lawson", "小吃", "夜市", "壽司", "披薩", "pizza", "茶", "點心", "飲料")) -> ExpenseCategory.food
-        hasAny(t, listOf("購物", "伴手禮", "紀念品", "衣", "鞋", "外套", "outlet", "藥妝", "淘寶", "olive", "免稅", "代購", "uniqlo", "spao", "化妝", "百貨")) -> ExpenseCategory.shopping
+        hasAny(t, listOf("餐", "食", "飯", "麵", "面", "咖啡", "cafe", "café", "coffee", "早午", "拉麵", "燒肉", "烤", "串", "湯", "甜", "麵包", "酒", "bar", "7-11", "711", "超商", "便利", "全家", "lawson", "小吃", "夜市", "壽司", "披薩", "pizza", "茶", "點心", "飲料", "雞", "菜", "奶", "冰", "米線", "香腸", "餅", "牛", "豬", "肉", "丼", "定食", "料理", "食堂", "超市", "水果", "shake shack", "早餐", "宵夜")) -> ExpenseCategory.food
+        hasAny(t, listOf("購物", "伴手禮", "紀念品", "衣", "鞋", "外套", "outlet", "藥妝", "淘寶", "olive", "免稅", "代購", "uniqlo", "spao", "化妝", "百貨", "褲", "包", "土產", "吊飾", "雜貨", "workman", "big camera", "唐吉")) -> ExpenseCategory.shopping
         else -> ExpenseCategory.other
     }
 }
@@ -170,11 +171,13 @@ fun categoryOf(text: String): ExpenseCategory? {
         ?: when (t) { "吃", "食", "餐", "美食" -> ExpenseCategory.food; "車資", "車" -> ExpenseCategory.transport; "飯店" -> ExpenseCategory.lodging; else -> null }
 }
 
+private val FLIGHT_NO_IN = Regex("""(?<![A-Za-z0-9])[A-Z]{2}\s?\d{2,4}(?![0-9])""")
+
 /** How a line of the itinerary says you get there: its emoji or words. */
 fun guessTransport(text: String): Transport {
     val t = text.lowercase()
     return when {
-        hasAny(t, listOf("✈", "🛫", "🛬", "航班", "班機", "飛往")) -> Transport.flight
+        hasAny(t, listOf("✈", "🛫", "🛬", "航班", "班機", "飛往")) || FLIGHT_NO_IN.containsMatchIn(text) -> Transport.flight
         hasAny(t, listOf("⛴", "🚢", "🛳", "渡輪", "搭船", "遊船")) -> Transport.ferry
         hasAny(t, listOf("🚃", "🚂", "🚄", "🚅", "🚆", "🚇", "🚉", "🚈", "電車", "火車", "地鐵", "捷運", "新幹線", "ktx", "srt", "jr ", "jr線", "特快", "快速", "nex", "haruka")) -> Transport.train
         hasAny(t, listOf("🚌", "🚍", "巴士", "公車", "bus")) -> Transport.bus
