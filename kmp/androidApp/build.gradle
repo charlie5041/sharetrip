@@ -1,0 +1,63 @@
+// The installable Android app: a thin shell around :composeApp.
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+
+def version = new Properties()
+file('../version.properties').withInputStream { version.load(it) }
+
+// The release key, written by CI from repository secrets. Without it (pull
+// requests, local builds) the release build is debug-signed: it runs, but
+// can't install over the testers' app.
+def keyProps = new Properties()
+def keyFile = file('key.properties')
+if (keyFile.exists()) keyFile.withInputStream { keyProps.load(it) }
+
+android {
+    namespace 'tw.tripshare'
+    compileSdk 37
+
+    defaultConfig {
+        // The Flutter app's id, so this installs over it and keeps its data
+        // and Google sign-in setup.
+        applicationId 'com.charliechen.sharetrip'
+        minSdk 24
+        targetSdk 36
+        versionCode version['versionCode'] as int
+        versionName version['versionName']
+    }
+
+    signingConfigs {
+        if (keyFile.exists()) {
+            release {
+                storeFile file(keyProps['storeFile'])
+                storePassword keyProps['storePassword']
+                keyAlias keyProps['keyAlias']
+                keyPassword keyProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            signingConfig keyFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources.excludes += ['/META-INF/{AL2.0,LGPL2.1}', 'DebugProbesKt.bin']
+    }
+}
+
+dependencies {
+    implementation project(':composeApp')
+    implementation 'org.jetbrains.compose.runtime:runtime:1.12.2'
+    implementation 'androidx.activity:activity-compose:1.11.0'
+}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="和朋友一起記帳、分帳、看行程">
+  <meta name="theme-color" content="#FFFCF6">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="同遊">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>同遊</title>
+  <style>
+    html,body{margin:0;height:100%;background:#FFFCF6;color:#3E3A39;overflow:hidden;font-family:system-ui,sans-serif}
+    #status{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <div id="app" style="position:fixed;inset:0"></div>
+  <div id="status">載入中…</div>
+  <script>
+    // Before the app starts, an error is shown instead of a blank page (for
+    // example a browser without WebAssembly GC), so a tester can tell us why.
+    // Once it runs, the app sets tripshareOnError and reports errors itself.
+    function showError(msg) {
+      var s = document.getElementById('status');
+      if (!s) { s = document.createElement('div'); s.id = 'status'; s.style.background = '#FFFCF6'; s.style.zIndex = 9; document.body.appendChild(s); }
+      s.textContent = '無法啟動：\n' + msg + '\n\n' + navigator.userAgent;
+    }
+    function onError(msg, stack) {
+      if (window.tripshareOnError) window.tripshareOnError(msg, stack);
+      else showError(msg);
+    }
+    window.addEventListener('error', function (e) {
+      onError(e.message || String(e.error), e.error && e.error.stack);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      onError(String(r && (r.message || r)), r && r.stack);
+    });
+    // Android Chrome offers its install dialog once; keep it for the
+    // "add to home screen" guide in the app.
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.tripshareInstall = e;
+    });
+    window.addEventListener('appinstalled', function () { window.tripshareInstall = null; });
+    if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+  </script>
+  <script src="tripshare.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "hosting": {
+    "site": "tripshare-tw",
+    "public": "composeApp/build/dist/wasmJs/productionExecutable",
+    "headers": [
+      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  }
+}

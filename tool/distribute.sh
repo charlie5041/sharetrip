@@ -4,8 +4,7 @@
 # Run by the distribute jobs in .github/workflows/ci.yml, after the build.
 #
 # USAGE
-#   tool/distribute.sh android    # build/app/outputs/flutter-apk/app-release.apk
-#   tool/distribute.sh ios        # build/ios/ipa/*.ipa (macOS only)
+#   tool/distribute.sh android    # kmp/androidApp/build/outputs/apk/release/*.apk
 #
 # ENVIRONMENT
 #   FIREBASE_SERVICE_ACCOUNT  the service account's JSON key
@@ -22,15 +21,12 @@ cd "$ROOT"
 platform="${1:-}"
 case "$platform" in
   android)
-    build=build/app/outputs/flutter-apk/app-release.apk
-    app_id=$(jq -r '.client[0].client_info.mobilesdk_app_id' android/app/google-services.json)
-    ;;
-  ios)
-    build=$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)
-    app_id=$(/usr/libexec/PlistBuddy -c 'Print :GOOGLE_APP_ID' ios/Runner/GoogleService-Info.plist)
+    build=$(find kmp/androidApp/build/outputs/apk/release -maxdepth 1 -name '*.apk' -print -quit)
+    # The Firebase Android app the Flutter app used; same id, same testers.
+    app_id=1:307482465264:android:ec5f444450ac8de73d0335
     ;;
   *)
-    echo "usage: tool/distribute.sh android|ios" >&2
+    echo "usage: tool/distribute.sh android" >&2
     exit 1
     ;;
 esac
@@ -41,7 +37,7 @@ if [ -z "$build" ] || [ ! -f "$build" ]; then
 fi
 
 notes="$RUNNER_TEMP/release-notes.txt"
-version=$(sed -n 's/^version: *//p' pubspec.yaml)
+version="$(sed -n 's/^versionName=//p' kmp/version.properties)+$(sed -n 's/^versionCode=//p' kmp/version.properties)"
 {
   echo "$version (${GITHUB_SHA::7})"
   echo

@@ -1,0 +1,127 @@
+package tw.tripshare
+
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
+import dev.gitlive.firebase.firestore.firestore
+import dev.gitlive.firebase.initialize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
+import tw.tripshare.data.TripRepository
+import tw.tripshare.screens.JoinScreen
+import tw.tripshare.screens.LocalSession
+import tw.tripshare.screens.Session
+import tw.tripshare.screens.TripFormScreen
+import tw.tripshare.screens.TripListScreen
+import tw.tripshare.screens.ExpenseFormScreen
+import tw.tripshare.screens.FlightFormScreen
+import tw.tripshare.screens.ItemFormScreen
+import tw.tripshare.screens.LodgingFormScreen
+import tw.tripshare.screens.TripScreen
+import tw.tripshare.ui.AppTheme
+import tw.tripshare.ui.BackPress
+import tw.tripshare.ui.CenterMessage
+import tw.tripshare.ui.InkButton
+import tw.tripshare.ui.LocalNav
+import tw.tripshare.ui.LocalToasts
+import tw.tripshare.ui.Navigator
+import tw.tripshare.ui.Page
+import tw.tripshare.ui.Screen
+import tw.tripshare.ui.Toasts
+import tw.tripshare.data.Reporter
+import dev.gitlive.firebase.firestore.LocalCacheSettings
+import dev.gitlive.firebase.firestore.firestoreSettings
+import kotlinx.coroutines.CoroutineExceptionHandler
+
+private var firebaseStarted = false
+
+/** Starts Firebase and signs in anonymously (or restores this device's account). */
+private suspend fun startSession(restart: () -> Unit): Session {
+    if (!firebaseStarted) {
+        installCrashHook(Reporter::recordError)
+        Firebase.initialize(platformContext(), firebaseOptions)
+        // Keeps trips on the phone, so the app opens and records offline.
+        // Android does this by default; the web needs to be told, before
+        // the first read.
+        if (isWeb) {
+            runCatching {
+                Firebase.firestore.settings = firestoreSettings {
+                    cacheSettings = LocalCacheSettings.Persistent.newBuilder().build()
+                }
+            }.onFailure { Reporter.recordError("persistence: $it", null) }
+        }
+        firebaseStarted = true
+    }
+    val auth = Firebase.auth
+    withTimeout(20_000) {
+        // On the web the saved sign-in is restored asynchronously, so
+        // currentUser is still null at first; signing in again would make a
+        // new anonymous user who is in none of this person's trips.
+        val saved = auth.currentUser ?: auth.authStateChanged.first()
+        if (saved == null) auth.signInAnonymously()
+    }
+    val uid = auth.currentUser!!.uid
+    val crashes = CoroutineExceptionHandler { _, e -> Reporter.recordError(e.toString(), e.stackTraceToString()) }
+    val background = CoroutineScope(SupervisorJob() + crashes)
+    Reporter.attach(Firebase.firestore, uid, background)
+    return Session(TripRepository(Firebase.firestore, uid), background, restart)
+}
+
+@Composable
+fun App() {
+    AppTheme {
+        var attempt by remember { mutableIntStateOf(0) }
+        var session by remember { mutableStateOf<Session?>(null) }
+        var failed by remember { mutableStateOf(false) }
+        val toasts = remember { Toasts() }
+        LaunchedEffect(attempt) {
+            failed = false
+            runCatching { startSession(restart = { session = null; attempt++ }) }.onSuccess { session = it }.onFailure { failed = true }
+        }
+        CompositionLocalProvider(LocalToasts provides toasts) {
+            val s = session
+            if (s == null) {
+                Page("同遊") {
+                    if (failed) {
+                        CenterMessage("連不上伺服器，請確認網路後再試一次") {
+                            InkButton("重試", { attempt++ }, Modifier.fillMaxWidth())
+                        }
+                    } else {
+                        CenterMessage("同遊啟動中…")
+                    }
+                }
+            } else {
+                // A new navigator per account, so nothing from another identity survives.
+                val nav = remember(s.repo.uid) { Navigator(Screen.TripList) }
+                DisposableEffect(nav) {
+                    BackPress.handler = nav::pop
+                    onDispose { BackPress.handler = null }
+                }
+                CompositionLocalProvider(LocalSession provides s, LocalNav provides nav) {
+                    when (val screen = nav.current) {
+                        Screen.TripList -> TripListScreen()
+                        Screen.NewTrip -> TripFormScreen()
+                        Screen.Join -> JoinScreen()
+                        is Screen.TripView -> TripScreen(screen.tripId)
+                        is Screen.ExpenseForm -> ExpenseFormScreen(screen.tripId, screen.expenseId)
+                        is Screen.ItemForm -> ItemFormScreen(screen.tripId, screen.itemId, screen.date)
+                        is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
+                        is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
+                    }
+                }
+            }
+        }
+    }
+}
