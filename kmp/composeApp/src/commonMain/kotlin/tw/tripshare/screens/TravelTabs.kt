@@ -118,6 +118,11 @@ fun OverviewTab(data: TripData) {
     SectionTitle("住宿") { TextAction("＋ 新增", { nav.push(Screen.LodgingForm(trip.id, null)) }) }
     if (data.lodgings.isEmpty()) Txt("還沒有住宿資訊", size = 14, color = AppColors.faint)
     data.lodgings.forEach { LodgingCard(trip.id, it) }
+
+    InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Import(trip.id)) }) {
+        Txt("📋 從試算表匯入", bold = true)
+        Txt("把 Google 試算表或 Excel 上的花費、行程、住宿一次搬進來", size = 14, color = AppColors.faint)
+    }
 }
 
 @Composable

@@ -45,6 +45,14 @@ data class Currency(val code: String, val name: String, val decimals: Int) {
             Currency("VND", "越南盾", 0),
             Currency("GBP", "英鎊", 2),
             Currency("AUD", "澳幣", 2),
+            Currency("NZD", "紐幣", 2),
+            Currency("CAD", "加幣", 2),
+            Currency("CHF", "瑞士法郎", 2),
+            Currency("MYR", "馬來西亞令吉", 2),
+            Currency("PHP", "菲律賓披索", 2),
+            Currency("IDR", "印尼盾", 0),
+            Currency("HUF", "匈牙利福林", 0),
+            Currency("CZK", "捷克克朗", 2),
         )
 
         fun of(code: String): Currency =

@@ -272,4 +272,67 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
         sub(tripId, "checklist").document(id).update("done" to done, "doneBy" to if (done) byName else null)
 
     suspend fun deleteChecklistEntry(tripId: String, id: String) = sub(tripId, "checklist").document(id).delete()
+
+    // ---- Import from a spreadsheet -----------------------------------------
+
+    /** An id for a member the import will create, so expenses can point at them before they exist. */
+    fun newMemberId(tripId: String): String = members(tripId).document.id
+
+    /**
+     * Writes one import: new members first, then everything else, each
+     * document tagged with [importId] so [undoImport] can take it all back.
+     * Firestore takes at most 500 writes per batch, so larger imports go in
+     * several; members are always in the first.
+     */
+    suspend fun importAll(
+        tripId: String,
+        importId: String,
+        newMembers: List<Pair<String, String>>,
+        firstOrder: Long,
+        expenses: List<Expense>,
+        items: List<ItineraryItem>,
+        lodgings: List<Lodging>,
+        flights: List<Flight>,
+        checklist: List<Pair<ChecklistKind, String>>,
+    ) {
+        val now = nowMillis()
+        val tag = mapOf("importId" to importId)
+        val writes = mutableListOf<Pair<dev.gitlive.firebase.firestore.DocumentReference, Doc>>()
+        newMembers.forEachIndexed { i, (id, name) ->
+            writes += members(tripId).document(id) to
+                mapOf("name" to name.trim(), "uid" to null, "order" to firstOrder + i, "joinedAt" to now) + tag
+        }
+        expenses.forEach { e ->
+            writes += sub(tripId, "expenses").document to e.toMap() + mapOf("updatedAt" to now, "createdBy" to uid) + tag
+        }
+        items.forEachIndexed { i, it -> writes += sub(tripId, "items").document to it.toMap() + ("order" to now + i) + tag }
+        lodgings.forEach { writes += sub(tripId, "lodgings").document to it.toMap() + tag }
+        flights.forEach { writes += sub(tripId, "flights").document to it.toMap() + tag }
+        checklist.forEachIndexed { i, (kind, text) ->
+            writes += sub(tripId, "checklist").document to
+                mapOf("kind" to kind.name, "text" to text, "done" to false, "doneBy" to null, "order" to now + i) + tag
+        }
+        writes.chunked(450).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { (ref, data) -> batch.set(ref, data) }
+            batch.commit()
+        }
+    }
+
+    /** Deletes what [importId] wrote and nobody has edited since (an edit drops the tag). */
+    suspend fun undoImport(tripId: String, importId: String) {
+        for (name in listOf("expenses", "items", "lodgings", "flights", "checklist", "members")) {
+            sub(tripId, name).where { "importId" equalTo importId }.get().documents
+                .filter { name != "members" || it.fields["uid"] == null }
+                .chunked(400).forEach { chunk ->
+                    val batch = db.batch()
+                    chunk.forEach { batch.delete(it.reference) }
+                    batch.commit()
+                }
+        }
+    }
+
+    /** Moves the trip's dates, e.g. so imported days fall inside it. */
+    suspend fun updateTripDates(tripId: String, start: String, end: String) =
+        trips.document(tripId).update("startDate" to start, "endDate" to end)
 }
