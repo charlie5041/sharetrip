@@ -24,3 +24,31 @@ class DayFlightTest {
         assertNull(dayFlight(ItemRow("2025-10-27", "14:05", "BKK 素萬那普機場")))
     }
 }
+
+class PendingAmountTest {
+    private val ctx = ImportContext("2026-11-04", "2026-11-11", "TWD", listOf("Charlie", "Sandy"))
+    private val choices = ExpenseChoices(
+        defaultCurrency = "JPY", defaultPayerId = "c", names = mapOf("charlie" to "c", "sandy" to "s"),
+        rates = mapOf("JPY" to "0.21"), memberOrder = listOf("c", "s"),
+    )
+
+    @Test fun rowsWithoutAnAmountComeInAsZeroAndSettleToNothing() {
+        val r = analyze("項目\t金額\t支付人\n全家雨傘\t\tCharlie\n宵夜\t0\tSandy\n拉麵\t¥1,200\tCharlie\n", ctx)
+        val settled = r.expenses.map { it.settle(ctx, choices) { 0L } }
+        val ready = settled.map { it as tw.tripshare.core.sheet.Settled.Ready }
+        assertEquals(listOf(true, true, false), ready.map { it.pending })
+        assertEquals(listOf(0L, 0L, 1200L), ready.map { it.expense.amountMinor })
+        val members = listOf("c", "s").map { tw.tripshare.core.Member(id = it, name = it, order = 0, joinedAt = 0) }
+        val zeroOnly = tw.tripshare.core.balances(members, ready.take(2).map { it.expense.copy(id = "x") }, emptyList(), tw.tripshare.core.Currency.of("TWD"))
+        assertEquals(true, zeroOnly.values.all { it == 0L })
+    }
+}
+
+class CategoryTest {
+    @Test fun whatWasBoughtBeatsTheShop() {
+        assertEquals(tw.tripshare.core.ExpenseCategory.shopping, guessCategory("Lawson * Coleman 外套"))
+        assertEquals(tw.tripshare.core.ExpenseCategory.shopping, guessCategory("Big Camera 麵包超人跟泡澡球"))
+        assertEquals(tw.tripshare.core.ExpenseCategory.food, guessCategory("Lawson"))
+        assertEquals(tw.tripshare.core.ExpenseCategory.food, guessCategory("Saison Bakery&Cafe"))
+    }
+}

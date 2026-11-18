@@ -103,7 +103,7 @@ internal fun findExpenses(s: Section, ctx: ImportContext): List<ExpenseRow> {
             if (title.isEmpty() && amountText.isEmpty()) continue
             if (isSummary(title)) continue
             fun at(c: Int?) = c?.let { s.cell(row - 1, it) }.orEmpty()
-            val (money, moneyError) = try {
+            val (money, moneyError) = if (amountText.isEmpty()) null to null else try {
                 parseMoney(amountText).let { it.copy(currency = it.currency ?: headerCurrency) } to null
             } catch (e: MoneyError) { null to e.message }
             val currencyText = at(currencyCol)
@@ -117,7 +117,6 @@ internal fun findExpenses(s: Section, ctx: ImportContext): List<ExpenseRow> {
             val problem = when {
                 title.isEmpty() -> "沒有項目名稱"
                 moneyError != null -> moneyError
-                money != null && money.number.trimStart('0', '.').isEmpty() -> "金額是 0"
                 currencyText.isNotEmpty() && currencyColumn == null -> "不認得的幣別「$currencyText」"
                 else -> null
             }
@@ -164,7 +163,8 @@ fun nameKey(name: String): String = name.trim().lowercase().replace(" ", "")
 
 /** A row settled: the expense to write, or why it can't be. */
 sealed interface Settled {
-    data class Ready(val expense: Expense, val rateSource: RateSource) : Settled
+    /** [pending]: no amount on the sheet, imported as 0 to fill in later. */
+    data class Ready(val expense: Expense, val rateSource: RateSource, val pending: Boolean = false) : Settled
     data class Problem(val reason: String) : Settled
 }
 
@@ -179,12 +179,13 @@ fun ExpenseRow.currencyFor(c: ExpenseChoices): String = namedCurrency ?: c.defau
  */
 fun ExpenseRow.settle(ctx: ImportContext, c: ExpenseChoices, occurredAt: (String) -> Long): Settled {
     problem?.let { return Settled.Problem(it) }
-    val m = money ?: return Settled.Problem("沒有金額")
     val code = currencyFor(c)
     val cur = Currency.all.firstOrNull { it.code == code } ?: return Settled.Problem("不支援的幣別 $code")
     val base = Currency.of(ctx.base)
-    val (minor, _) = toMinor(m.number, cur)
-    if (minor <= 0) return Settled.Problem("金額是 0")
+    // A row without an amount still saves typing its name; it comes in as 0.
+    val minor = money?.let { toMinor(it.number, cur).first } ?: 0L
+    if (minor < 0) return Settled.Problem("金額是負的")
+    val pending = minor == 0L
     val payerId = payer?.let { c.names[nameKey(it)] } ?: if (payer == null) c.defaultPayerId else null
     if (payerId == null) return Settled.Problem(if (payer == null) "沒有填支付人" else "「$payer」還沒對應到成員")
     val ids = if (splitNames == null) c.memberOrder else {
@@ -194,7 +195,7 @@ fun ExpenseRow.settle(ctx: ImportContext, c: ExpenseChoices, occurredAt: (String
     if (ids.isEmpty()) return Settled.Problem("沒有人分攤")
     val (rate, source) = when {
         code == ctx.base -> "1" to RateSource.same
-        baseNumber != null -> {
+        baseNumber != null && !pending -> {
             val (baseMinor, _) = toMinor(baseNumber, base)
             val r = formatRate(baseMinor.toDouble() / pow10(base.decimals) / (minor.toDouble() / pow10(cur.decimals)))
                 ?: return Settled.Problem("折合金額算不出匯率")
@@ -220,6 +221,7 @@ fun ExpenseRow.settle(ctx: ImportContext, c: ExpenseChoices, occurredAt: (String
             note = note,
         ),
         source,
+        pending,
     )
 }
 

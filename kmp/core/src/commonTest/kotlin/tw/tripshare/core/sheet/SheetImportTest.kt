@@ -63,7 +63,8 @@ class SheetImportTest {
         val first = r.expenses[0]
         assertEquals("TWD", first.namedCurrency)
         assertEquals("Sandy", first.payer)
-        assertEquals("沒有金額", r.expenses[1].problem)
+        assertEquals(null, r.expenses[1].problem)
+        assertEquals(null, r.expenses[1].money)
         assertEquals(ExpenseCategory.lodging, r.expenses[2].category)
         assertEquals("其他信用卡｜BK ¥18,636", r.expenses[2].note)
         assertEquals("JPY", r.expenses[3].namedCurrency)
