@@ -34,12 +34,40 @@
     function diagnostics() {
       var lines = [];
       lines.push('畫面 ' + innerWidth + '×' + innerHeight + ' @' + devicePixelRatio + 'x，螢幕 ' + screen.width + '×' + screen.height);
-      var canvases = document.getElementsByTagName('canvas');
+      // Compose puts its canvas inside a shadow root, out of plain DOM queries.
+      var canvases = [];
+      (function find(root) {
+        var all = root.querySelectorAll('*');
+        for (var k = 0; k < all.length; k++) {
+          if (all[k].tagName === 'CANVAS') canvases.push(all[k]);
+          if (all[k].shadowRoot) find(all[k].shadowRoot);
+        }
+      })(document);
       for (var i = 0; i < canvases.length; i++) {
         var c = canvases[i];
-        lines.push('畫布 ' + c.width + '×' + c.height + '（顯示 ' + c.clientWidth + '×' + c.clientHeight + '）');
+        var r = c.getBoundingClientRect();
+        var info = '畫布 ' + c.width + '×' + c.height + '，位置 ' + Math.round(r.left) + ',' + Math.round(r.top) + ' 大小 ' + Math.round(r.width) + '×' + Math.round(r.height);
+        try {
+          var ctx = c.getContext('webgl2') || c.getContext('webgl');
+          info += ctx ? '，繪圖 ' + (ctx.isContextLost() ? '已遺失' : '正常') + ' ' + ctx.drawingBufferWidth + '×' + ctx.drawingBufferHeight + ' ' + ctx.getParameter(ctx.VERSION) : '，沒有 WebGL';
+        } catch (e) { info += '，讀取失敗 ' + e; }
+        var cs = getComputedStyle(c);
+        info += '，顯示 ' + cs.display + ' 透明度 ' + cs.opacity;
+        lines.push(info);
       }
       if (!canvases.length) lines.push('沒有畫布');
+      // What is actually on screen in the middle, with this panel hidden.
+      var panel = document.getElementById('diag');
+      if (panel) panel.style.visibility = 'hidden';
+      var at = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+      var path = [];
+      while (at) {
+        path.push(at.tagName.toLowerCase() + (at.id ? '#' + at.id : ''));
+        at = at.shadowRoot && at.shadowRoot.elementFromPoint(innerWidth / 2, innerHeight / 2) !== at ? at.shadowRoot.elementFromPoint(innerWidth / 2, innerHeight / 2) : null;
+      }
+      if (panel) panel.style.visibility = '';
+      lines.push('中間看到 ' + (path.join(' > ') || '無'));
+      lines.push('背景 ' + getComputedStyle(document.body).backgroundColor);
       try {
         var gl = document.createElement('canvas').getContext('webgl2');
         lines.push(gl ? 'WebGL2 可用，最大材質 ' + gl.getParameter(gl.MAX_TEXTURE_SIZE) + '、最大畫布 ' + gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) : 'WebGL2 不可用');
