@@ -20,8 +20,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import tw.tripshare.core.ChecklistEntry
 import tw.tripshare.core.Currency
@@ -64,21 +67,28 @@ sealed interface Load<out T> {
     data class Ready<T>(val value: T) : Load<T>
 }
 
+/** Retries a refused stream after 0.5, 1, 2 and 4 seconds, then lets the error through. */
+private fun <T> Flow<T>.retryBriefly(): Flow<T> = retryWhen { _, attempt ->
+    if (attempt < 4) { delay(500L shl attempt.toInt()); true } else false
+}
+
 /** A trip and its lists, live. Gone once the trip is dissolved or this device is no longer a member. */
 @Composable
 fun rememberTripData(tripId: String): Load<TripData> {
     val repo = LocalSession.current.repo
     // A read error means the rules refused: this device is no longer a member.
+    // Or the trip was just created and the server hasn't seen it yet, which
+    // is why each stream retries for a few seconds before giving up.
     val trip by remember(tripId) {
-        repo.watchTrip(tripId).map { t -> if (t == null) Load.Gone else Load.Ready(t) }.catch { emit(Load.Gone) }
+        repo.watchTrip(tripId).retryBriefly().map { t -> if (t == null) Load.Gone else Load.Ready(t) }.catch { emit(Load.Gone) }
     }.collectAsState(Load.Waiting)
-    val members by remember(tripId) { repo.watchMembers(tripId).catch { } }.collectAsState(null)
-    val expenses by remember(tripId) { repo.watchExpenses(tripId).catch { } }.collectAsState(null)
-    val settlements by remember(tripId) { repo.watchSettlements(tripId).catch { } }.collectAsState(null)
-    val items by remember(tripId) { repo.watchItems(tripId).catch { } }.collectAsState(null)
-    val flights by remember(tripId) { repo.watchFlights(tripId).catch { } }.collectAsState(null)
-    val lodgings by remember(tripId) { repo.watchLodgings(tripId).catch { } }.collectAsState(null)
-    val checklist by remember(tripId) { repo.watchChecklist(tripId).catch { } }.collectAsState(null)
+    val members by remember(tripId) { repo.watchMembers(tripId).retryBriefly().catch { } }.collectAsState(null)
+    val expenses by remember(tripId) { repo.watchExpenses(tripId).retryBriefly().catch { } }.collectAsState(null)
+    val settlements by remember(tripId) { repo.watchSettlements(tripId).retryBriefly().catch { } }.collectAsState(null)
+    val items by remember(tripId) { repo.watchItems(tripId).retryBriefly().catch { } }.collectAsState(null)
+    val flights by remember(tripId) { repo.watchFlights(tripId).retryBriefly().catch { } }.collectAsState(null)
+    val lodgings by remember(tripId) { repo.watchLodgings(tripId).retryBriefly().catch { } }.collectAsState(null)
+    val checklist by remember(tripId) { repo.watchChecklist(tripId).retryBriefly().catch { } }.collectAsState(null)
     val t = trip
     if (t is Load.Gone) return Load.Gone
     if (t !is Load.Ready) return Load.Waiting
