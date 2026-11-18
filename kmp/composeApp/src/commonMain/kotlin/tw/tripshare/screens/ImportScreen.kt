@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,12 +30,18 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDateTime
 import tw.tripshare.copyToClipboard
+import tw.tripshare.core.Expense
 import tw.tripshare.core.Flight
 import tw.tripshare.core.ItineraryItem
 import tw.tripshare.core.Lodging
 import tw.tripshare.core.Transport
 import tw.tripshare.core.parseYmd
+import tw.tripshare.core.sheet.ChecklistRow
+import tw.tripshare.data.PastImport
 import tw.tripshare.core.sheet.ExpenseChoices
+import tw.tripshare.core.sheet.FlightRow
+import tw.tripshare.core.sheet.ItemRow
+import tw.tripshare.core.sheet.LodgingRow
 import tw.tripshare.core.sheet.ImportContext
 import tw.tripshare.core.sheet.ImportResult
 import tw.tripshare.core.sheet.KNOWN_HEADERS
@@ -42,6 +49,12 @@ import tw.tripshare.core.sheet.RateSource
 import tw.tripshare.core.sheet.Settled
 import tw.tripshare.core.sheet.aiPrompt
 import tw.tripshare.core.sheet.analyze
+import tw.tripshare.core.sheet.analyzeRows
+import tw.tripshare.core.sheet.SheetError
+import tw.tripshare.core.sheet.SheetInfo
+import tw.tripshare.core.sheet.SheetRef
+import tw.tripshare.core.sheet.parseSheetLink
+import tw.tripshare.data.GoogleSheets
 import tw.tripshare.core.sheet.autoMatch
 import tw.tripshare.core.sheet.currencyFor
 import tw.tripshare.core.sheet.mentionedNames
@@ -74,23 +87,54 @@ private enum class Step { Paste, Preview, Done }
  * chat's tables), check what was read, then write it all in one go, with
  * a way to take the whole import back.
  */
+/** What the preview reads: pasted text, or one tab read from a shared link. */
+private sealed interface Input {
+    data class Text(val text: String) : Input
+    data class Tab(val title: String, val rows: List<List<String>>) : Input
+}
+
+/** The shared-link part of the first step, kept while going back and forth. */
+private class LinkState {
+    var link by mutableStateOf("")
+    var ref by mutableStateOf<SheetRef?>(null)
+    var info by mutableStateOf<SheetInfo?>(null)
+    var error by mutableStateOf<String?>(null)
+    var busy by mutableStateOf(false)
+}
+
 @Composable
 fun ImportScreen(tripId: String) {
     val nav = LocalNav.current
     WithTrip(tripId) { data ->
         var step by remember { mutableStateOf(Step.Paste) }
         var text by remember { mutableStateOf("") }
+        var input by remember { mutableStateOf<Input?>(null) }
+        val linkState = remember { LinkState() }
         var importId by remember { mutableStateOf<String?>(null) }
         var summary by remember { mutableStateOf("") }
         val ctx = ImportContext(data.trip.startDate, data.trip.endDate, data.trip.baseCurrency, data.members.map { it.name })
         val back: () -> Unit = { if (step == Step.Preview) step = Step.Paste else nav.pop() }
         Page("從試算表匯入", onBack = back) {
             when (step) {
-                Step.Paste -> PasteStep(data, ctx, text, { text = it }) { step = Step.Preview }
-                Step.Preview -> PreviewStep(data, ctx, remember(text, ctx) { analyze(text, ctx) }) { id, said ->
-                    importId = id
-                    summary = said
-                    step = Step.Done
+                Step.Paste -> {
+                    LinkPart(linkState) { title, rows -> input = Input.Tab(title, rows); step = Step.Preview }
+                    PastePart(data, ctx, text, { text = it }) { input = Input.Text(text); step = Step.Preview }
+                    PastImports(data)
+                }
+                Step.Preview -> {
+                    val i = input!!
+                    if (i is Input.Tab) Txt("分頁「${i.title}」", size = 14, color = AppColors.faint)
+                    val result = remember(i, ctx) {
+                        when (i) {
+                            is Input.Text -> analyze(i.text, ctx)
+                            is Input.Tab -> analyzeRows(i.rows, ctx, i.title)
+                        }
+                    }
+                    PreviewStep(data, ctx, result) { id, said ->
+                        importId = id
+                        summary = said
+                        step = Step.Done
+                    }
                 }
                 Step.Done -> DoneStep(data, importId!!, summary)
             }
@@ -98,13 +142,59 @@ fun ImportScreen(tripId: String) {
     }
 }
 
+/** Paste a sheet's link, pick a tab. */
 @Composable
-private fun PasteStep(data: TripData, ctx: ImportContext, text: String, onText: (String) -> Unit, onNext: () -> Unit) {
+private fun LinkPart(st: LinkState, onTab: (String, List<List<String>>) -> Unit) {
+    val scope = rememberCoroutineScope()
+    fun run(block: suspend () -> Unit) {
+        if (st.busy) return
+        st.busy = true
+        st.error = null
+        scope.launch {
+            try { block() } catch (e: SheetError) { st.error = e.message } catch (e: Exception) { st.error = "讀取失敗：${e.message}" }
+            st.busy = false
+        }
+    }
+    SectionTitle("用試算表連結")
+    InkCard(Modifier.fillMaxWidth(), fill = AppColors.mizu) {
+        Txt("貼上 Google 試算表的連結，選一個分頁就能匯入。", size = 15)
+        Txt("試算表要先按「共用」，把一般存取權設成「知道連結的任何人」可以檢視。", size = 14, color = AppColors.faint)
+    }
+    InkField(st.link, { st.link = it; st.error = null }, "試算表連結", maxLength = 500)
+    InkButton(if (st.busy && st.info == null) "讀取中…" else "讀取分頁", {
+        val ref = parseSheetLink(st.link)
+        if (ref == null) { st.error = "這看起來不是 Google 試算表的連結"; return@InkButton }
+        run {
+            st.info = null
+            st.info = GoogleSheets.tabs(ref.id)
+            st.ref = ref
+        }
+    }, Modifier.fillMaxWidth(), enabled = st.link.isNotBlank() && !st.busy)
+    st.error?.let { Txt(it, size = 14, color = AppColors.error) }
+    val info = st.info
+    val ref = st.ref
+    if (info != null && ref != null) {
+        Txt("「${info.title}」有 ${info.tabs.size} 個分頁，選一個：", size = 14, color = AppColors.faint)
+        val linked = info.tabs.firstOrNull { it.gid == ref.gid }
+        (listOfNotNull(linked) + info.tabs.filter { it != linked }).forEach { tab ->
+            InkCard(Modifier.fillMaxWidth(), fill = if (tab == linked) AppColors.yamabuki else AppColors.paper, onClick = {
+                run { onTab(tab.title, GoogleSheets.values(ref.id, tab.title)) }
+            }) {
+                Txt(tab.title, bold = true)
+                if (tab == linked) Txt("你貼的連結開的是這個分頁", size = 13, color = AppColors.faint)
+            }
+        }
+        if (st.busy) Txt("讀取中…", size = 14, color = AppColors.faint)
+    }
+}
+
+@Composable
+private fun PastePart(data: TripData, ctx: ImportContext, text: String, onText: (String) -> Unit, onNext: () -> Unit) {
     val toasts = LocalToasts.current
     var showHeaders by remember { mutableStateOf(false) }
-    InkCard(Modifier.fillMaxWidth(), fill = AppColors.mizu) {
-        Txt("1. 在 Google 試算表或 Excel 選取要匯入的範圍，複製", size = 15)
-        Txt("2. 貼在下面，按「讀取」", size = 15)
+    SectionTitle("或複製貼上")
+    InkCard(Modifier.fillMaxWidth()) {
+        Txt("在 Google 試算表或 Excel 選取範圍、複製，貼在下面按「讀取」。Excel 檔或不想公開的試算表用這個。", size = 15)
         Txt("可以一次選花費表加行程，總計、平均這類彙總會自動略過。匯入前會先讓你看過。", size = 14, color = AppColors.faint)
     }
     InkField(text, onText, "貼上的內容", maxLength = 200_000, lines = 6)
@@ -125,10 +215,28 @@ private fun PasteStep(data: TripData, ctx: ImportContext, text: String, onText: 
 
 /** Ticks per row, keyed like "e3" (expense 3) or "i0" (stop 0); absent means ticked. */
 private class Ticks {
-    val off = mutableStateMapOf<String, Boolean>()
-    fun on(key: String) = off[key] != true
-    fun toggle(key: String) { off[key] = on(key) }
+    private val set = mutableStateMapOf<String, Boolean>()
+    /** [default] is false for rows the trip already has. */
+    fun on(key: String, default: Boolean = true) = set[key] ?: default
+    fun toggle(key: String, default: Boolean = true) { set[key] = !on(key, default) }
 }
+
+/** What the trip already holds, so importing the same sheet twice doesn't double it. */
+private class Existing(d: TripData) {
+    private fun k(s: String) = s.trim().lowercase()
+    private val expenses = d.expenses.map { Triple(k(it.title), it.amountMinor, it.currency) }.toSet()
+    private val items = d.items.map { it.date to k(it.title) }.toSet()
+    private val lodgings = d.lodgings.map { k(it.name) to it.checkIn }.toSet()
+    private val flights = d.flights.map { k(it.flightNo) to it.departDate }.toSet()
+    private val checklist = d.checklist.map { it.kind to k(it.text) }.toSet()
+    fun has(e: Expense) = Triple(k(e.title), e.amountMinor, e.currency) in expenses
+    fun has(r: ItemRow) = (r.date to k(r.title)) in items
+    fun has(r: LodgingRow) = (k(r.name) to r.checkIn) in lodgings
+    fun has(r: FlightRow) = (k(r.flightNo) to r.departDate) in flights
+    fun has(r: ChecklistRow) = (r.kind to k(r.text)) in checklist
+}
+
+private const val ALREADY = "已經有了，預設不匯入"
 
 @Composable
 private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onDone: (String, String) -> Unit) {
@@ -155,7 +263,8 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
     }
     val newIds = remember(r) { mutableMapOf<String, String>() }
     var defaultCurrency by remember(r) { mutableStateOf(base) }
-    var defaultPayer by remember(r) { mutableStateOf<String?>(null) }
+    // Most sheets leave the payer blank; the person importing is the likeliest guess.
+    var defaultPayer by remember(r) { mutableStateOf(data.me?.id) }
     val rates = remember(r) { mutableStateMapOf<String, String>() }
     var confirming by remember { mutableStateOf(false) }
 
@@ -172,6 +281,19 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
     )
     val noonOf = { ymd: String -> parseYmd(ymd).let { localMillis(LocalDateTime(it.year, it.month, it.day, 12, 0)) } }
     val settled = r.expenses.map { it.settle(ctx, choices, noonOf) }
+    val have = remember(r) { Existing(data) }
+    val dupE = settled.map { s -> s is Settled.Ready && have.has(s.expense) }
+    val dupI = r.items.map(have::has)
+    val dupL = r.lodgings.map(have::has)
+    val dupF = r.flights.map(have::has)
+    val dupC = r.checklist.map(have::has)
+    val dupCount = (dupE + dupI + dupL + dupF + dupC).count { it }
+    if (dupCount > 0) {
+        InkCard(Modifier.fillMaxWidth(), fill = AppColors.mizu) {
+            Txt("有 $dupCount 筆旅程裡已經有了", bold = true)
+            Txt("名稱、日期和金額都一樣的列預設不勾，要重複匯入可以自己勾回來。", size = 14)
+        }
+    }
 
     // Currencies that need a rate because some row has no 折合 amount.
     val needRate = r.expenses.filter { it.baseNumber == null && it.problem == null }
@@ -252,16 +374,16 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
                     listOfNotNull(row.date?.let(::shortDate), "$payer 付", who, s.expense.category.label).joinToString(" · ") + rateText
                 }
                 is Settled.Problem -> s.reason
-            }
+            }.let { if (dupE[i]) "$ALREADY · $it" else it }
             val amount = row.money?.let { m -> "${m.number} ${row.currencyFor(choices)}" } ?: ""
             PickRow(
                 title = row.title.ifEmpty { "（第 ${row.line} 列）" },
                 subtitle = subtitle,
                 trailing = amount,
-                checked = s is Settled.Ready && ticks.on(key),
+                checked = s is Settled.Ready && ticks.on(key, !dupE[i]),
                 enabled = s is Settled.Ready,
                 warn = s is Settled.Problem,
-                onToggle = { ticks.toggle(key) },
+                onToggle = { ticks.toggle(key, !dupE[i]) },
             )
         }
     }
@@ -272,37 +394,37 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
             PickRow(
                 title = it.title,
                 subtitle = listOfNotNull(shortDate(it.date), it.time, it.transport.takeIf { t -> t != Transport.none }?.label, it.note?.lines()?.first())
-                    .joinToString(" · "),
-                checked = ticks.on("i$i"),
-                onToggle = { ticks.toggle("i$i") },
+                    .joinToString(" · ").let { s -> if (dupI[i]) "$ALREADY · $s" else s },
+                checked = ticks.on("i$i", !dupI[i]),
+                onToggle = { ticks.toggle("i$i", !dupI[i]) },
             )
         }
     }
     if (r.lodgings.isNotEmpty()) {
         SectionTitle("住宿 ${r.lodgings.size} 筆")
         r.lodgings.forEachIndexed { i, it ->
-            PickRow(it.name, "${shortDate(it.checkIn)} → ${shortDate(it.checkOut)}" + (it.note?.let { n -> " · $n" } ?: ""), checked = ticks.on("l$i"), onToggle = { ticks.toggle("l$i") })
+            PickRow(it.name, (if (dupL[i]) "$ALREADY · " else "") + "${shortDate(it.checkIn)} → ${shortDate(it.checkOut)}" + (it.note?.let { n -> " · $n" } ?: ""), checked = ticks.on("l$i", !dupL[i]), onToggle = { ticks.toggle("l$i", !dupL[i]) })
         }
     }
     if (r.flights.isNotEmpty()) {
         SectionTitle("航班 ${r.flights.size} 班")
         r.flights.forEachIndexed { i, it ->
-            PickRow("${it.flightNo} ${it.fromCode} → ${it.toCode}", "${shortDate(it.departDate)} ${it.departTime}", checked = ticks.on("f$i"), onToggle = { ticks.toggle("f$i") })
+            PickRow("${it.flightNo} ${it.fromCode} → ${it.toCode}", (if (dupF[i]) "$ALREADY · " else "") + "${shortDate(it.departDate)} ${it.departTime}", checked = ticks.on("f$i", !dupF[i]), onToggle = { ticks.toggle("f$i", !dupF[i]) })
         }
     }
     if (r.checklist.isNotEmpty()) {
         SectionTitle("清單 ${r.checklist.size} 項")
         r.checklist.forEachIndexed { i, it ->
-            PickRow(it.text, it.kind.label, checked = ticks.on("c$i"), onToggle = { ticks.toggle("c$i") })
+            PickRow(it.text, (if (dupC[i]) "$ALREADY · " else "") + it.kind.label, checked = ticks.on("c$i", !dupC[i]), onToggle = { ticks.toggle("c$i", !dupC[i]) })
         }
     }
     SkippedList(r)
 
-    val expenses = settled.withIndex().filter { (i, s) -> s is Settled.Ready && ticks.on("e$i") }.map { (_, s) -> (s as Settled.Ready).expense }
-    val items = r.items.withIndex().filter { ticks.on("i${it.index}") }.map { it.value }
-    val lodgings = r.lodgings.withIndex().filter { ticks.on("l${it.index}") }.map { it.value }
-    val flights = r.flights.withIndex().filter { ticks.on("f${it.index}") }.map { it.value }
-    val checklist = r.checklist.withIndex().filter { ticks.on("c${it.index}") }.map { it.value }
+    val expenses = settled.withIndex().filter { (i, s) -> s is Settled.Ready && ticks.on("e$i", !dupE[i]) }.map { (_, s) -> (s as Settled.Ready).expense }
+    val items = r.items.withIndex().filter { ticks.on("i${it.index}", !dupI[it.index]) }.map { it.value }
+    val lodgings = r.lodgings.withIndex().filter { ticks.on("l${it.index}", !dupL[it.index]) }.map { it.value }
+    val flights = r.flights.withIndex().filter { ticks.on("f${it.index}", !dupF[it.index]) }.map { it.value }
+    val checklist = r.checklist.withIndex().filter { ticks.on("c${it.index}", !dupC[it.index]) }.map { it.value }
     val usedIds = expenses.flatMap { e -> e.splits.keys + e.payerId }.toSet()
     val creating = newMembers.filter { it.first in usedIds }
     val parts = listOfNotNull(
@@ -313,6 +435,15 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
         checklist.size.takeIf { it > 0 }?.let { "清單 $it 項" },
         creating.size.takeIf { it > 0 }?.let { "新成員 $it 位" },
     )
+    // Rows that can't be imported are greyed out above; say so next to the button too.
+    val blocked = settled.filterIsInstance<Settled.Problem>()
+    if (blocked.isNotEmpty()) {
+        InkCard(Modifier.fillMaxWidth(), fill = AppColors.yamabuki) {
+            Txt("有 ${blocked.size} 筆花費不會匯入", bold = true)
+            val why = blocked.groupingBy { it.reason }.eachCount().entries.sortedByDescending { it.value }.take(3)
+            Txt(why.joinToString("、") { "${it.key}（${it.value} 筆）" } + "。可以在上面的「名字對應」或「沒寫的時候」補上。", size = 14)
+        }
+    }
     InkButton(
         if (parts.isEmpty()) "沒有勾選要匯入的資料" else "匯入：${parts.joinToString("、")}",
         { confirming = true },
@@ -342,6 +473,44 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
                 onDone(id, parts.joinToString("、"))
             },
             onDismiss = { confirming = false },
+        )
+    }
+}
+
+/** Earlier imports, each of which can still be taken back as a whole. */
+@Composable
+private fun PastImports(data: TripData) {
+    val session = LocalSession.current
+    val toasts = LocalToasts.current
+    var past by remember { mutableStateOf<List<PastImport>?>(null) }
+    var refresh by remember { mutableStateOf(0) }
+    var undoing by remember { mutableStateOf<PastImport?>(null) }
+    LaunchedEffect(refresh) { past = runCatching { session.repo.pastImports(data.trip.id) }.getOrNull() }
+    val list = past?.takeIf { it.isNotEmpty() } ?: return
+    val labels = listOf("expenses" to "花費", "items" to "行程", "lodgings" to "住宿", "flights" to "航班", "checklist" to "清單")
+    fun describe(p: PastImport) = labels.mapNotNull { (k, l) -> p.counts[k]?.let { "$l $it" } }.joinToString("、")
+    SectionTitle("之前的匯入")
+    Txt("匯入兩次重複了？整批復原其中一次就好。匯入後改過的資料不會被刪。", size = 14, color = AppColors.faint)
+    list.forEachIndexed { i, p ->
+        InkCard(Modifier.fillMaxWidth()) {
+            Txt("第 ${i + 1} 批：${describe(p)}", bold = true)
+            TextAction("復原這批", { undoing = p }, color = AppColors.error)
+        }
+    }
+    undoing?.let { p ->
+        ConfirmDialog(
+            "復原這批匯入？",
+            "${describe(p)}會從「${data.trip.name}」刪掉。",
+            "復原",
+            onConfirm = {
+                undoing = null
+                session.background.launch {
+                    runCatching { session.repo.undoImport(data.trip.id, p.id) }
+                        .onSuccess { refresh++ }
+                        .onFailure { toasts.show("復原失敗：${it.message}") }
+                }
+            },
+            onDismiss = { undoing = null },
         )
     }
 }

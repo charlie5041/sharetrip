@@ -23,10 +23,12 @@ data class ImportResult(
  * row tables of stops, stays, flights and checklist entries. Totals,
  * exchange notes and anything without a recognisable header are left out.
  */
-fun analyze(text: String, ctx: ImportContext): ImportResult {
+fun analyze(text: String, ctx: ImportContext): ImportResult = analyzeSections(parsePasted(text), ctx)
+
+internal fun analyzeSections(sections: List<Section>, ctx: ImportContext): ImportResult {
     val expenses = mutableListOf<ExpenseRow>()
     val travel = TravelOut()
-    for (s in parsePasted(text)) {
+    for (s in sections) {
         expenses += findExpenses(s, ctx)
         findDayColumns(s, ctx, travel)
         findRowTables(s, ctx, travel)
