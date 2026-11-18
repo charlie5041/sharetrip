@@ -146,16 +146,24 @@
       setBoot('ready');
       if (/[?&]debug/.test(location.search)) showPanel('診斷資訊');
     };
+    function webgl2() {
+      try { return !!document.createElement('canvas').getContext('webgl2'); } catch (_) { return false; }
+    }
+    // Why this browser can't run 同遊, or null when it should be able to.
+    function unsupported() {
+      if (!wasmGc()) return '這台裝置的瀏覽器太舊\n請更新到 iOS / iPadOS 18.2 以上，或改用最新版 Chrome';
+      if (!webgl2()) return '這個瀏覽器關掉了圖形加速（WebGL），同遊畫不出畫面\nChrome：設定 → 系統 → 打開「使用圖形加速功能」，再重新啟動 Chrome';
+      return null;
+    }
     setTimeout(function () {
       if (window.tripshareBoot !== 'ready' && !document.getElementById('diag')) {
-        showPanel(wasmGc() ? '同遊一直沒有啟動完成\n請截圖這個畫面傳給我們' : '這台裝置的瀏覽器太舊\n請更新到 iOS / iPadOS 18.2 以上，或改用最新版 Chrome');
+        showPanel(unsupported() || '同遊一直沒有啟動完成\n請截圖這個畫面傳給我們');
       }
     }, 20000);
-    if (!wasmGc()) {
-      window.addEventListener('DOMContentLoaded', function () {
-        showPanel('這台裝置的瀏覽器太舊\n請更新到 iOS / iPadOS 18.2 以上，或改用最新版 Chrome');
-      });
-    }
+    window.addEventListener('DOMContentLoaded', function () {
+      var why = unsupported();
+      if (why) showPanel(why);
+    });
     // Android Chrome offers its install dialog once; keep it for the
     // "add to home screen" guide in the app.
     window.addEventListener('beforeinstallprompt', function (e) {
