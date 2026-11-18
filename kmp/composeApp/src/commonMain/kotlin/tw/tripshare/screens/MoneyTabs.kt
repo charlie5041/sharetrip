@@ -59,7 +59,6 @@ private fun totalOrNull(data: TripData): Long? =
 fun ExpensesTab(data: TripData) {
     val nav = LocalNav.current
     InkButton("＋ 記一筆", { nav.push(Screen.ExpenseForm(data.trip.id, null)) }, Modifier.fillMaxWidth())
-    TextAction("📋 從試算表匯入", { nav.push(Screen.Import(data.trip.id)) }, Modifier.fillMaxWidth())
     if (data.expenses.isEmpty()) {
         CenterMessage("還沒有支出，按上面記第一筆")
         return
