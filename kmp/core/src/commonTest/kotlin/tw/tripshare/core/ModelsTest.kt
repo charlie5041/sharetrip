@@ -6,6 +6,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class ModelsTest {
+    @Test fun ownerIsAbsentWhenNeverSeenOrAfterTwoWeeks() {
+        val day = 24L * 3600 * 1000
+        val t = Trip("t", "東京", "TWD", "2026-12-20", "2026-12-24", "a", listOf("a"), 0)
+        kotlin.test.assertTrue(t.ownerAbsent(100 * day))
+        kotlin.test.assertFalse(t.copy(ownerSeenAt = 90 * day).ownerAbsent(100 * day))
+        kotlin.test.assertTrue(t.copy(ownerSeenAt = 85 * day).ownerAbsent(100 * day))
+    }
+
     @Test fun currencyFormatsAndParses() {
         val usd = Currency.of("USD")
         assertEquals("123.45", usd.format(12345))

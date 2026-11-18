@@ -52,13 +52,45 @@ service cloud.firestore {
         && request.resource.data.ownerUid == me()
         && request.resource.data.memberUids == [me()];
 
-      // Members may edit the trip's details. Who is in it (memberUids) is
-      // the owner's to change, and the owner always stays in.
+      function tripChanged() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+      function isOwnerNow() {
+        return signedIn() && resource.data.ownerUid == me();
+      }
+      // The owner's app stamps ownerSeenAt (server time) when it opens the
+      // trip. An owner not seen for 14 days, or never (trips from before
+      // the stamp), may be replaced by any member, so a trip whose owner
+      // lost their account doesn't stay ownerless forever.
+      function ownerAbsent() {
+        return !('ownerSeenAt' in resource.data)
+          || resource.data.ownerSeenAt < request.time - duration.value(14, 'd');
+      }
+
+      // Members may edit the trip's details. Who is in it (memberUids), who
+      // runs it (ownerUid) and the owner's stamp are handled below.
       allow update: if signedIn() && me() in resource.data.memberUids
-        && request.resource.data.ownerUid == resource.data.ownerUid
-        && (!('memberUids' in request.resource.data.diff(resource.data).affectedKeys())
-            || (resource.data.ownerUid == me()
-                && me() in request.resource.data.memberUids));
+        && !tripChanged().hasAny(['ownerUid', 'memberUids', 'ownerSeenAt']);
+
+      // The owner changes anything: who is in (always staying in), the
+      // stamp (only to now), and may hand the trip to another member.
+      allow update: if isOwnerNow()
+        && me() in request.resource.data.memberUids
+        && request.resource.data.ownerUid in request.resource.data.memberUids
+        && (!tripChanged().hasAny(['ownerSeenAt'])
+            || request.resource.data.ownerSeenAt == request.time);
+
+      // Leaving: a member who isn't the owner takes out exactly their own uid.
+      allow update: if signedIn() && me() in resource.data.memberUids && !isOwnerNow()
+        && tripChanged().hasOnly(['memberUids'])
+        && request.resource.data.memberUids.toSet()
+             == resource.data.memberUids.toSet().difference([me()].toSet());
+
+      // Taking over from an absent owner.
+      allow update: if signedIn() && me() in resource.data.memberUids && ownerAbsent()
+        && tripChanged().hasOnly(['ownerUid', 'ownerSeenAt'])
+        && request.resource.data.ownerUid == me()
+        && request.resource.data.ownerSeenAt == request.time;
 
       allow delete: if signedIn() && resource.data.ownerUid == me();
 
@@ -105,10 +137,17 @@ service cloud.firestore {
           && trip(tripId).ownerUid == me()
           && (request.resource.data.uid == resource.data.uid
               || request.resource.data.uid == null);
-        // Anyone renames themself.
+        // Anyone renames themself, or lets go of their place (leaving the
+        // trip, or moving to another name) — the name and its expenses stay.
         allow update: if signedIn() && isMember(tripId)
           && resource.data.uid == me()
-          && changed().hasOnly(['name']);
+          && (changed().hasOnly(['name'])
+              || (changed().hasOnly(['uid']) && request.resource.data.uid == null));
+        // A member moves to an open place, letting go of theirs in the same batch.
+        allow update: if signedIn() && isMember(tripId)
+          && resource.data.uid == null
+          && request.resource.data.uid == me()
+          && changed().hasOnly(['uid', 'joinedAt']);
         // Joining: take an open place, in the same batch as the join.
         allow update: if signedIn() && resource.data.uid == null
           && request.resource.data.uid == me()

@@ -18,6 +18,7 @@ import tw.tripshare.copyToClipboard
 import tw.tripshare.core.InviteCodes
 import tw.tripshare.core.Member
 import tw.tripshare.data.RefusedException
+import tw.tripshare.nowMillis
 import tw.tripshare.ui.ActionRow
 import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.Avatar
@@ -59,8 +60,9 @@ fun MembersTab(data: TripData) {
 
     data.members.forEach { m ->
         val isMe = m.uid != null && m.uid == data.myUid
-        // Only the owner manages the list; anyone may rename themselves.
-        val canAct = data.isOwner || isMe
+        // Only the owner manages the list; anyone may rename themselves,
+        // leave, or move to a name nobody has taken.
+        val canAct = data.isOwner || isMe || m.uid == null
         InkCard(Modifier.fillMaxWidth(), onClick = if (canAct) ({ dialog = MemberDialog.Menu(m) }) else null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Avatar(m.name, joined = m.uid != null)
@@ -87,6 +89,27 @@ fun MembersTab(data: TripData) {
         else "名單由群主管理。要加人或刪人，請找群主。",
         size = 13, color = AppColors.faint,
     )
+    if (!data.isOwner && data.me != null && data.trip.ownerAbsent(nowMillis())) {
+        InkButton("接手群主", {
+            dialog = MemberDialog.Confirm(
+                "接手群主？",
+                "群主最近兩週沒有打開過這趟旅程，可能換了手機或帳號不見了。接手後由你管理名單；原本的群主之後回來，會變成一般成員。",
+                "接手",
+            ) { repo.claimOwner(tripId) }
+        }, Modifier.fillMaxWidth(), fill = AppColors.paper)
+    }
+    if (!data.isOwner && data.me != null) {
+        TextAction("退出旅程", {
+            dialog = MemberDialog.Confirm(
+                "退出「${data.trip.name}」？",
+                "你會看不到這趟旅程。名字「${data.me!!.name}」和相關的帳都會留著，變成「還沒加入」；之後拿到邀請碼、選回這個名字就能回來。",
+                "退出",
+            ) {
+                nav.popToRoot()
+                repo.leaveTrip(tripId, data.me!!)
+            }
+        }, Modifier.fillMaxWidth(), color = AppColors.error)
+    }
     if (data.isOwner) {
         InkButton("加入成員", { dialog = MemberDialog.Name("加入成員", "", null) }, Modifier.fillMaxWidth(), fill = AppColors.paper)
         TextAction("解散旅程", {
@@ -97,6 +120,7 @@ fun MembersTab(data: TripData) {
                 repo.dissolveTrip(tripId)
             }
         }, Modifier.fillMaxWidth(), color = AppColors.error)
+        Txt("群主要退出，請先點一位已加入的成員，把群主轉給他。", size = 13, color = AppColors.faint)
     }
 
     when (val d = dialog) {
@@ -107,9 +131,23 @@ fun MembersTab(data: TripData) {
             val canRename = data.isOwner || isMe
             val canRemove = data.isOwner && !isMe
             val canUnbind = canRemove && m.uid != null
+            val canTransfer = canUnbind && m.uid != data.trip.ownerUid
+            val canMoveHere = m.uid == null && data.me != null
             run {
                 InkDialog(m.name, { dialog = null }, buttons = { TextAction("取消", { dialog = null }) }) {
                     if (canRename) ActionRow("改名字") { dialog = MemberDialog.Name("改名字", m.name, m) }
+                    if (canMoveHere) ActionRow("我是「${m.name}」", "把你換到這個名字，「${data.me!!.name}」會變回還沒加入") {
+                        val from = data.me!!
+                        dialog = null
+                        write { repo.moveToPlace(tripId, from, m) }
+                    }
+                    if (canTransfer) ActionRow("轉讓群主", "名單改由他管理，你變成一般成員") {
+                        dialog = MemberDialog.Confirm(
+                            "把群主轉給「${m.name}」？",
+                            "之後加人、刪人、解散旅程都由他決定。要拿回來，得請他再轉給你。",
+                            "轉讓",
+                        ) { repo.transferOwner(tripId, m.uid!!) }
+                    }
                     if (canUnbind) ActionRow("解除綁定", "他換手機或資料不見時用：名字和帳都留著，他再用邀請碼加入、選回這個名字就好") {
                         dialog = MemberDialog.Confirm(
                             "解除「${m.name}」的綁定？",
