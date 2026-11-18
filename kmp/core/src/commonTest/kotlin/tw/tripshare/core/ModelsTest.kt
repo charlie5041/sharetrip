@@ -73,7 +73,7 @@ class ModelsTest {
         assertEquals(f, Flight.fromMap("f1", f.toMap()))
         val l = Lodging("l1", "淺草飯店", "2026-12-20", "2026-12-25", confirmation = "ABC123")
         assertEquals(l, Lodging.fromMap("l1", l.toMap()))
-        val c = ChecklistEntry("c1", ChecklistKind.packing, "護照", done = true, order = 3, doneBy = "Charlie")
+        val c = ChecklistEntry("c1", ChecklistKind.packing, "護照", done = true, order = 3, doneBy = "Alex")
         assertEquals(c, ChecklistEntry.fromMap("c1", c.toMap()))
     }
 
