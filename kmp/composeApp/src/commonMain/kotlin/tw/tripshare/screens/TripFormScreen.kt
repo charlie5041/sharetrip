@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import tw.tripshare.core.Currency
@@ -75,12 +76,14 @@ fun TripFormScreen() {
         val id = repo.newTripId()
         val others = friends.toList() + listOfNotNull(friend.trim().takeIf { it.isNotEmpty() })
         // Not awaited: offline, the write lands in the local cache at once
-        // and reaches the server later.
-        session.background.launch {
-            runCatching { repo.setNickname(me.trim()) }
+        // and reaches the server later. Started undispatched so the trip is
+        // in the local cache before the trip screen starts listening to it;
+        // the nickname waits until after, since its write awaits the server.
+        session.background.launch(start = CoroutineStart.UNDISPATCHED) {
             runCatching {
                 repo.createTrip(id, name, currency, ymd(start!!), ymd(end ?: start!!), me.trim(), others)
             }.onFailure { toasts.show("沒有存成功：${it.message}") }
+            runCatching { repo.setNickname(me.trim()) }
         }
         nav.replace(Screen.TripView(id))
     }
