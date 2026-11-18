@@ -238,7 +238,8 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
     }
     val newIds = remember(r) { mutableMapOf<String, String>() }
     var defaultCurrency by remember(r) { mutableStateOf(base) }
-    var defaultPayer by remember(r) { mutableStateOf<String?>(null) }
+    // Most sheets leave the payer blank; the person importing is the likeliest guess.
+    var defaultPayer by remember(r) { mutableStateOf(data.me?.id) }
     val rates = remember(r) { mutableStateMapOf<String, String>() }
     var confirming by remember { mutableStateOf(false) }
 
@@ -396,6 +397,15 @@ private fun PreviewStep(data: TripData, ctx: ImportContext, r: ImportResult, onD
         checklist.size.takeIf { it > 0 }?.let { "清單 $it 項" },
         creating.size.takeIf { it > 0 }?.let { "新成員 $it 位" },
     )
+    // Rows that can't be imported are greyed out above; say so next to the button too.
+    val blocked = settled.filterIsInstance<Settled.Problem>()
+    if (blocked.isNotEmpty()) {
+        InkCard(Modifier.fillMaxWidth(), fill = AppColors.yamabuki) {
+            Txt("有 ${blocked.size} 筆花費不會匯入", bold = true)
+            val why = blocked.groupingBy { it.reason }.eachCount().entries.sortedByDescending { it.value }.take(3)
+            Txt(why.joinToString("、") { "${it.key}（${it.value} 筆）" } + "。可以在上面的「名字對應」或「沒寫的時候」補上。", size = 14)
+        }
+    }
     InkButton(
         if (parts.isEmpty()) "沒有勾選要匯入的資料" else "匯入：${parts.joinToString("、")}",
         { confirming = true },
