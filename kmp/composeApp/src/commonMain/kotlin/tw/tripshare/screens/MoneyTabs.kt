@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,10 +26,12 @@ import tw.tripshare.core.ExpenseCategory
 import tw.tripshare.core.balances
 import tw.tripshare.core.baseTotal
 import tw.tripshare.core.hm
+import tw.tripshare.core.Transfer
 import tw.tripshare.core.suggestTransfers
 import tw.tripshare.localDateTime
 import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.CenterMessage
+import tw.tripshare.ui.ConfirmDialog
 import tw.tripshare.ui.InkButton
 import tw.tripshare.ui.InkCard
 import tw.tripshare.ui.LocalNav
@@ -112,9 +118,19 @@ fun SettleTab(data: TripData) {
         return
     }
     val transfers = suggestTransfers(n)
+    // Expenses imported without an amount count as 0 until someone fills them in.
+    val pending = data.expenses.filter { it.amountMinor == 0L }
+    var confirming by remember { mutableStateOf<Transfer?>(null) }
 
     fun write(failure: String, block: suspend () -> Unit) {
         session.background.launch { runCatching { block() }.onFailure { toasts.show(failure) } }
+    }
+
+    if (pending.isNotEmpty()) {
+        InkCard(Modifier.fillMaxWidth(), fill = AppColors.yamabuki) {
+            Txt("還有 ${pending.size} 筆花費沒填金額", bold = true)
+            Txt("下面的結算先當它們是 0 元：" + pending.take(3).joinToString("、") { it.title } + if (pending.size > 3) " 等" else "", size = 14)
+        }
     }
 
     SectionTitle("每個人的狀況")
@@ -148,10 +164,24 @@ fun SettleTab(data: TripData) {
                     Txt(money(base, t.amountMinor), size = 18)
                 }
                 InkButton("已轉帳", {
-                    write("沒有記成功，請再試一次") { session.repo.addSettlement(data.trip.id, t.fromId, t.toId, t.amountMinor) }
+                    if (pending.isNotEmpty()) confirming = t
+                    else write("沒有記成功，請再試一次") { session.repo.addSettlement(data.trip.id, t.fromId, t.toId, t.amountMinor) }
                 })
             }
         }
+    }
+
+    confirming?.let { t ->
+        ConfirmDialog(
+            "還有花費沒填金額",
+            "${pending.size} 筆花費還是 0 元（${pending.take(3).joinToString("、") { it.title }}${if (pending.size > 3) " 等" else ""}），這筆轉帳金額可能少算。確定要記成已轉帳？",
+            "確定",
+            onConfirm = {
+                confirming = null
+                write("沒有記成功，請再試一次") { session.repo.addSettlement(data.trip.id, t.fromId, t.toId, t.amountMinor) }
+            },
+            onDismiss = { confirming = null },
+        )
     }
 
     if (data.settlements.isNotEmpty()) {
