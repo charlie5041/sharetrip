@@ -157,6 +157,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      # Safari 27.2 shows a white page if Skia is reached through tail calls.
+      - run: node tools/check-tail-calls.mjs composeApp/build/dist/wasmJs/productionExecutable
+        working-directory: kmp
       # Fills in the offline cache list; without it the app needs a
       # connection to open.
       - run: node tools/offline.mjs composeApp/build/dist/wasmJs/productionExecutable
