@@ -24,6 +24,8 @@ import tw.tripshare.data.TripRepository
 import tw.tripshare.screens.ImportScreen
 import tw.tripshare.screens.JoinScreen
 import tw.tripshare.screens.LocalSession
+import tw.tripshare.screens.LoginScreen
+import tw.tripshare.data.Google
 import tw.tripshare.screens.Session
 import tw.tripshare.screens.TripFormScreen
 import tw.tripshare.screens.TripListScreen
@@ -49,8 +51,12 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 
 private var firebaseStarted = false
 
-/** Starts Firebase and signs in anonymously (or restores this device's account). */
-private suspend fun startSession(restart: () -> Unit): Session {
+/**
+ * Starts Firebase and restores this device's account. Null when nobody is
+ * signed in: 同遊 needs a Google account, so nobody is signed in anonymously
+ * any more (identities from before that are linked on the login screen).
+ */
+private suspend fun startSession(restart: () -> Unit): Session? {
     if (!firebaseStarted) {
         installCrashHook(Reporter::recordError)
         Firebase.initialize(platformContext(), firebaseOptions)
@@ -69,11 +75,10 @@ private suspend fun startSession(restart: () -> Unit): Session {
     val auth = Firebase.auth
     withTimeout(20_000) {
         // On the web the saved sign-in is restored asynchronously, so
-        // currentUser is still null at first; signing in again would make a
-        // new anonymous user who is in none of this person's trips.
-        val saved = auth.currentUser ?: auth.authStateChanged.first()
-        if (saved == null) auth.signInAnonymously()
-    }
+        // currentUser is still null at first; treating that as signed out
+        // would send someone who is signed in to the login screen.
+        auth.currentUser ?: auth.authStateChanged.first()
+    } ?: return null
     val uid = auth.currentUser!!.uid
     val crashes = CoroutineExceptionHandler { _, e -> Reporter.recordError(e.toString(), e.stackTraceToString()) }
     val background = CoroutineScope(SupervisorJob() + crashes)
@@ -87,14 +92,23 @@ fun App() {
         var attempt by remember { mutableIntStateOf(0) }
         var session by remember { mutableStateOf<Session?>(null) }
         var failed by remember { mutableStateOf(false) }
+        var signedOut by remember { mutableStateOf(false) }
+        val restart: () -> Unit = { session = null; signedOut = false; attempt++ }
         val toasts = remember { Toasts() }
         LaunchedEffect(attempt) {
             failed = false
-            runCatching { startSession(restart = { session = null; attempt++ }) }.onSuccess { session = it }.onFailure { failed = true }
+            runCatching { startSession(restart) }
+                .onSuccess { session = it; signedOut = it == null }
+                .onFailure { failed = true }
         }
         CompositionLocalProvider(LocalToasts provides toasts) {
             val s = session
-            if (s == null) {
+            if (signedOut) {
+                LoginScreen(anonymous = null, onSignedIn = restart)
+            } else if (s != null && Google.linkedEmail() == null) {
+                // From before Google was required: link it, keeping its uid and trips.
+                LoginScreen(anonymous = s.repo, onSignedIn = restart)
+            } else if (s == null) {
                 Page("同遊") {
                     if (failed) {
                         CenterMessage("連不上伺服器，請確認網路後再試一次") {
