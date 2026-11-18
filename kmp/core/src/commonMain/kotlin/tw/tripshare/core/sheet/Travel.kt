@@ -134,6 +134,7 @@ internal fun findDayColumns(s: Section, ctx: ImportContext, out: TravelOut): Boo
                 }
                 val item = dayCell(date, if (w >= 2) cells[0] else "", if (w >= 2) cells.drop(1).filter { it.isNotEmpty() }.joinToString("\n") else cells[0])
                     ?: continue
+                dayFlight(item)?.let { out.flights += it; continue }
                 val extra = label.takeIf { it.isNotEmpty() && !it.contains("行程") }
                 out.items += item.copy(note = joinNotes(item.note, extra?.let { "（$it）" }))
             }
@@ -277,6 +278,7 @@ private fun stopTable(s: Section, r: Int, keys: List<String>, ctx: ImportContext
         if (d == null) { out.skipped += Skipped("行程", text, "找不到日期"); continue }
         val timeText = timeCol?.let { s.cell(row, it) }.orEmpty()
         val item = dayCell(d, timeText, text) ?: continue
+        dayFlight(item)?.let { out.flights += it; continue }
         val transportText = transportCol?.let { s.cell(row, it) }.orEmpty()
         out.items += item.copy(
             place = placeCol?.let { s.cell(row, it) }?.ifEmpty { null },
@@ -377,4 +379,42 @@ private fun checklistTable(s: Section, r: Int, keys: List<String>, kind: Checkli
         out.checklist += ChecklistRow(k, text.take(100))
     }
     return last
+}
+
+/** Airports people write by name in Chinese, to their codes. */
+private val AIRPORT_NAMES = listOf(
+    "桃園" to "TPE", "松山" to "TSA", "小港" to "KHH", "高雄" to "KHH", "清泉崗" to "RMQ",
+    "成田" to "NRT", "羽田" to "HND", "關西" to "KIX", "關空" to "KIX", "中部" to "NGO", "新千歲" to "CTS",
+    "福岡" to "FUK", "那霸" to "OKA", "熊本" to "KMJ", "廣島" to "HIJ", "仙台" to "SDJ", "岡山" to "OKJ",
+    "仁川" to "ICN", "金浦" to "GMP", "金海" to "PUS", "大邱" to "TAE", "濟州" to "CJU",
+    "素萬那普" to "BKK", "廊曼" to "DMK", "清邁" to "CNX", "香港" to "HKG", "澳門" to "MFM", "樟宜" to "SIN",
+    "墨爾本" to "MEL", "雪梨" to "SYD", "布達佩斯" to "BUD",
+)
+private val DAY_FLIGHT_NO = Regex("""(?<![A-Za-z0-9])([A-Z][A-Z0-9]|[0-9][A-Z])\s?(\d{2,4})(?![0-9])""")
+private val CLOCK = Regex("""(?<!\d)(\d{1,2}):(\d{2})(?!\d)""")
+
+/**
+ * A day cell that is really a flight: a flight number and two airports,
+ * like "17:15 桃園 - 21:30成田 MM628". Anything less stays a stop.
+ */
+internal fun dayFlight(item: ItemRow): FlightRow? {
+    val time = item.time ?: return null
+    val text = item.title + (item.note?.let { "\n$it" } ?: "")
+    val no = DAY_FLIGHT_NO.find(text) ?: return null
+    val stripped = text.removeRange(no.range.first, no.range.last + 1)
+    val found = (AIRPORT_NAMES.flatMap { (name, code) -> Regex(Regex.escape(name)).findAll(stripped).map { it.range.first to code }.toList() } +
+        AIRPORT.findAll(stripped).map { it.range.first to it.groupValues[1] })
+        .sortedBy { it.first }.map { it.second }.distinct()
+    if (found.size != 2) return null
+    val arrive = CLOCK.find(stripped)?.let { "${it.groupValues[1].padStart(2, '0')}:${it.groupValues[2]}" }
+    val nextDay = stripped.contains("+1")
+    return FlightRow(
+        flightNo = no.groupValues[1] + no.groupValues[2],
+        fromCode = found[0],
+        toCode = found[1],
+        departDate = item.date,
+        departTime = time,
+        arriveDate = arrive?.let { if (nextDay) nextDay(item.date) else item.date },
+        arriveTime = arrive,
+    )
 }
