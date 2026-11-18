@@ -18,8 +18,15 @@ external fun getAuth(): JsAuth
 
 external class GoogleAuthProvider : JsAny {
     fun setCustomParameters(params: JsAny): JsAny
+
+    companion object {
+        /** The Google credential a failed popup step carries, or null. */
+        fun credentialFromError(error: JsAny): JsAny?
+    }
 }
 
 external fun linkWithPopup(user: JsAny, provider: GoogleAuthProvider): Promise<JsAny?>
 
 external fun signInWithPopup(auth: JsAuth, provider: GoogleAuthProvider): Promise<JsAny?>
+
+external fun signInWithCredential(auth: JsAuth, credential: JsAny): Promise<JsAny?>

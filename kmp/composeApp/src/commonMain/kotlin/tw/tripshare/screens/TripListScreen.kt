@@ -71,7 +71,7 @@ fun TripListScreen() {
         }
     }
     if (feedback) FeedbackDialog { feedback = false }
-    if (account) AccountDialog { account = false }
+    if (account) AccountDialog(hasTrips = trips?.isNotEmpty() ?: true) { account = false }
 }
 
 @Composable

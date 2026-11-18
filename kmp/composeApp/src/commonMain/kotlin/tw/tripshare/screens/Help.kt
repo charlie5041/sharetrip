@@ -162,9 +162,11 @@ private fun CopyLink(link: String) {
 /**
  * Shows whether this identity is backed up to Google, and lets the person
  * back it up or switch to an identity they backed up on another device.
+ * [hasTrips] says whether switching away would leave trips behind; when it
+ * wouldn't, a Google account that's already in use is switched to at once.
  */
 @Composable
-fun AccountDialog(onDismiss: () -> Unit) {
+fun AccountDialog(hasTrips: Boolean, onDismiss: () -> Unit) {
     val session = LocalSession.current
     val toasts = LocalToasts.current
     val scope = rememberCoroutineScope()
@@ -173,6 +175,17 @@ fun AccountDialog(onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var inUse by remember { mutableStateOf<GoogleResult.InUse?>(null) }
 
+    val switched = { onDismiss(); session.restart() }
+
+    fun settle(r: GoogleResult, onOk: () -> Unit) {
+        when (r) {
+            GoogleResult.Ok -> onOk()
+            GoogleResult.Cancelled -> {}
+            is GoogleResult.InUse -> inUse = r
+            is GoogleResult.Failed -> error = r.message
+        }
+    }
+
     // Each start* call opens Google's window right away, inside the tap.
     fun go(start: () -> (suspend () -> GoogleResult), onOk: () -> Unit) {
         if (busy) return
@@ -180,25 +193,32 @@ fun AccountDialog(onDismiss: () -> Unit) {
         error = null
         val outcome = start()
         scope.launch {
-            when (val r = outcome()) {
-                GoogleResult.Ok -> onOk()
-                GoogleResult.Cancelled -> {}
-                is GoogleResult.InUse -> inUse = r
-                is GoogleResult.Failed -> error = r.message
-            }
+            val r = outcome()
+            val now = (r as? GoogleResult.InUse)?.switchNow
+            // Nothing to lose here, so take the identity the account already backs.
+            if (now != null && !hasTrips) settle(now(), switched) else settle(r, onOk)
             busy = false
         }
     }
 
-    val switch = { go(Google::startSignIn) { onDismiss(); session.restart() } }
+    val switch = { go(Google::startSignIn, switched) }
 
     val pending = inUse
     if (pending != null) {
+        val reuse = pending.switchNow
         InkDialog("這個帳號已經綁定過", { inUse = null }, buttons = {
             TextAction("取消", { inUse = null })
-            InkButton("改用那個身分", { inUse = null; switch() })
+            InkButton("改用那個身分", {
+                inUse = null
+                if (reuse == null) {
+                    switch()
+                } else {
+                    busy = true
+                    scope.launch { settle(reuse(), switched); busy = false }
+                }
+            })
         }) {
-            Txt("${pending.email ?: "這個 Google 帳號"} 已經綁在另一個同遊身分上。要改用那個身分嗎？這台裝置目前的身分（還沒綁定）會被放掉。")
+            Txt("${pending.email ?: "這個 Google 帳號"} 已經綁在另一個同遊身分上。要改用那個身分嗎？這台裝置目前的身分（還沒綁定）和它的旅程會被放掉。")
         }
         return
     }
