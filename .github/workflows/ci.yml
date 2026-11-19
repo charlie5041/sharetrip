@@ -55,6 +55,12 @@ jobs:
 
   # Did this push to main change versionCode in kmp/version.properties?
   # Raising it is what ships a build to testers; other pushes don't.
+  #
+  # A release always builds and ships both Android and web, even when the
+  # changes look one-sided: merges without a version bump pile up between
+  # releases, so this push alone doesn't show what changed, and skipping one
+  # side would leave it on an older version than the other. The two run side
+  # by side, so skipping Android wouldn't make a release finish sooner.
   version:
     name: Version changed
     if: >-

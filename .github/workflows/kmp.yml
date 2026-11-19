@@ -3,6 +3,11 @@ name: Kotlin rewrite
 # Builds the Compose Multiplatform version in kmp/ (Android + web), reports
 # its size and puts the web build on a temporary preview link. It never
 # touches the live site or the testers' Android app.
+#
+# Android and web build in separate jobs side by side, and a pull request
+# builds only the side its files can affect (see the changes job). Shared
+# code in commonMain reaches both, so most pull requests still build both.
+# Releases on main (ci.yml) always build both.
 on:
   pull_request:
     paths:
@@ -15,8 +20,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  kotlin:
-    name: Build Kotlin app
+  # Which builds can this pull request's files affect?
+  #   android only: kmp/androidApp/, composeApp/src/androidMain/
+  #   web only:     composeApp/src/wasmJsMain/ (index.html and sw.js are in
+  #                 its resources), composeApp/webpack.config.d/, kmp/tools/,
+  #                 kmp/firebase.preview.json
+  #   neither:      core/src/commonTest/ (ci.yml runs those tests)
+  #   both:         everything else in kmp/ (commonMain, Gradle files,
+  #                 version.properties, fonts) and this workflow
+  changes:
+    name: Which builds
+    runs-on: ubuntu-latest
+    outputs:
+      android: ${{ steps.pick.outputs.android }}
+      web: ${{ steps.pick.outputs.web }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: pick
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          android=false
+          web=false
+          # Files changed since the branch left main, as on the PR's Files tab.
+          files=$(git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD)
+          while read -r f; do
+            case "$f" in
+              kmp/androidApp/*|kmp/composeApp/src/androidMain/*)
+                android=true ;;
+              kmp/composeApp/src/wasmJsMain/*|kmp/composeApp/webpack.config.d/*|kmp/tools/*|kmp/firebase.preview.json)
+                web=true ;;
+              kmp/core/src/commonTest/*)
+                ;;
+              kmp/*|.github/workflows/kmp.yml)
+                android=true; web=true ;;
+            esac
+          done <<< "$files"
+          echo "::notice::Android build: $android, web build: $web"
+          echo "android=$android" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Build Android
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -28,7 +82,39 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew --no-daemon :core:jvmTest :androidApp:assembleRelease :composeApp:wasmJsBrowserDistribution
+      # Same command as the release in ci.yml.
+      - run: ./gradlew --no-daemon :androidApp:assembleRelease
+      - name: Size
+        run: |
+          apk=$(ls androidApp/build/outputs/apk/release/*.apk | head -1)
+          {
+            echo "## Android 大小"
+            echo "| 項目 | 大小 |"
+            echo "|---|---|"
+            echo "| Android APK | $(du -k "$apk" | cut -f1) KB |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kotlin-android-apk
+          path: kmp/androidApp/build/outputs/apk/release/*.apk
+
+  web:
+    name: Build web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kmp
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v5
+      # Same command as the release in ci.yml, so the preview matches it.
+      - run: ./gradlew --no-daemon :composeApp:wasmJsBrowserDistribution
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -39,13 +125,11 @@ jobs:
       - name: Sizes
         run: |
           command -v brotli >/dev/null || sudo apt-get install -y -qq brotli
-          apk=$(ls androidApp/build/outputs/apk/release/*.apk | head -1)
           web=composeApp/build/dist/wasmJs/productionExecutable
           {
-            echo "## Kotlin 版大小"
+            echo "## 網頁大小"
             echo "| 項目 | 大小 |"
             echo "|---|---|"
-            echo "| Android APK | $(du -k "$apk" | cut -f1) KB |"
             echo "| 網頁全部檔案 | $(du -sk $web | cut -f1) KB |"
             echo "| 網頁首次下載（brotli 後，不含 .map） | $(cd $web && for f in $(find . -type f ! -name '*.map' ! -name '*.txt'); do brotli -c -q 11 "$f" | wc -c; done | awk '{s+=$1} END {print int(s/1024)}') KB |"
             echo
@@ -72,16 +156,12 @@ jobs:
           path: ${{ runner.temp }}/smoke/*.png
       - uses: actions/upload-artifact@v4
         with:
-          name: kotlin-android-apk
-          path: kmp/androidApp/build/outputs/apk/release/*.apk
-      - uses: actions/upload-artifact@v4
-        with:
           name: kotlin-web
           path: kmp/composeApp/build/dist/wasmJs/productionExecutable
 
   preview:
     name: Web preview link
-    needs: kotlin
+    needs: web
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     env:
