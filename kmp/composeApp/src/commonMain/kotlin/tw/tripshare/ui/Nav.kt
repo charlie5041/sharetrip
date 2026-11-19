@@ -12,8 +12,8 @@ sealed interface Screen {
     data object NewTrip : Screen
     data object Join : Screen
     data class TripView(val tripId: String) : Screen
-    /** Adds an expense when [expenseId] is null, otherwise edits it. */
-    data class ExpenseForm(val tripId: String, val expenseId: String?) : Screen
+    /** Adds an expense when [expenseId] is null, otherwise edits it. A new one starts on [date] ("yyyy-MM-dd") when set, else today. */
+    data class ExpenseForm(val tripId: String, val expenseId: String?, val date: String? = null) : Screen
     /** A stop on [date]; edits [itemId] when set. */
     data class ItemForm(val tripId: String, val itemId: String?, val date: String) : Screen
     data class FlightForm(val tripId: String, val flightId: String?) : Screen

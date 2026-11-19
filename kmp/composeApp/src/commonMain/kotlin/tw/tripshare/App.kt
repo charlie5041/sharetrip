@@ -135,7 +135,7 @@ fun App() {
                             Screen.NewTrip -> TripFormScreen()
                             Screen.Join -> JoinScreen()
                             is Screen.TripView -> TripScreen(screen.tripId)
-                            is Screen.ExpenseForm -> ExpenseFormScreen(screen.tripId, screen.expenseId)
+                            is Screen.ExpenseForm -> ExpenseFormScreen(screen.tripId, screen.expenseId, screen.date)
                             is Screen.ItemForm -> ItemFormScreen(screen.tripId, screen.itemId, screen.date)
                             is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
                             is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
