@@ -1,7 +1,6 @@
 package tw.tripshare.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +18,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -36,11 +39,14 @@ import tw.tripshare.core.Member
 import tw.tripshare.core.Settlement
 import tw.tripshare.core.Trip
 import tw.tripshare.nowMillis
+import tw.tripshare.ui.AddButton
 import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.AppShape
 import tw.tripshare.ui.CenterMessage
 import tw.tripshare.ui.LocalNav
+import tw.tripshare.ui.Looks
 import tw.tripshare.ui.Page
+import tw.tripshare.ui.Screen
 import tw.tripshare.ui.Txt
 
 /** Everything a trip's screens read, gathered from the live streams. */
@@ -136,7 +142,13 @@ fun TripScreen(tripId: String) {
                 background.launch { runCatching { repo.stampOwnerSeen(tripId) } }
             }
         }
-        Page(data.trip.name, onBack = { nav.pop() }, bottom = { TabBar(tab) { tab = it } }) {
+        val quickAdd = TABS[tab] in setOf("總覽", "記帳", "結算")
+        Page(
+            data.trip.name,
+            onBack = { nav.pop() },
+            bottom = { TabBar(tab) { tab = it } },
+            fab = if (quickAdd) ({ AddButton({ nav.push(Screen.ExpenseForm(tripId, null)) }) }) else null,
+        ) {
             when (TABS[tab]) {
                 "總覽" -> OverviewTab(data)
                 "行程" -> ItineraryTab(data)
@@ -151,19 +163,37 @@ fun TripScreen(tripId: String) {
 
 @Composable
 private fun TabBar(selected: Int, onSelect: (Int) -> Unit) {
+    val scrap = Looks.scrapbook
+    val line = AppColors.line
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth()
+            .background(AppColors.card)
+            .drawBehind {
+                drawLine(
+                    line, Offset(0f, 0f), Offset(size.width, 0f), if (scrap) 2.dp.toPx() else 1.dp.toPx(),
+                    pathEffect = if (scrap) PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())) else null,
+                )
+            }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         TABS.forEachIndexed { i, label ->
             val on = i == selected
             Box(
-                Modifier.weight(1f).heightIn(min = 44.dp)
-                    .border(if (on) 2.dp else 0.dp, if (on) AppColors.ink else AppColors.paper, AppShape.small)
-                    .background(if (on) AppColors.yamabuki else AppColors.paper, AppShape.small)
+                Modifier.weight(1f).heightIn(min = 44.dp).clip(AppShape.small)
+                    .background(if (on && scrap) AppColors.yamabuki else AppColors.card, AppShape.small)
                     .clickable { onSelect(i) },
                 contentAlignment = Alignment.Center,
-            ) { Txt(label, size = 14, bold = on) }
+            ) {
+                Txt(
+                    label, size = 14, bold = on,
+                    color = when {
+                        !on -> AppColors.faint
+                        scrap -> AppColors.ink
+                        else -> AppColors.coral
+                    },
+                )
+            }
         }
     }
 }

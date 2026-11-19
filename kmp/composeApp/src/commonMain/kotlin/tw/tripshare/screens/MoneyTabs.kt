@@ -30,7 +30,10 @@ import tw.tripshare.core.Transfer
 import tw.tripshare.core.suggestTransfers
 import tw.tripshare.localDateTime
 import tw.tripshare.ui.AppColors
+import tw.tripshare.ui.AppShape
 import tw.tripshare.ui.CenterMessage
+import tw.tripshare.ui.HeroCard
+import tw.tripshare.ui.Looks
 import tw.tripshare.ui.ConfirmDialog
 import tw.tripshare.ui.InkButton
 import tw.tripshare.ui.InkCard
@@ -41,7 +44,16 @@ import tw.tripshare.ui.SectionTitle
 import tw.tripshare.ui.TextAction
 import tw.tripshare.ui.Txt
 
-fun money(c: Currency, minor: Long) = "${c.format(minor)} ${c.code}"
+fun money(c: Currency, minor: Long) = "${grouped(c.format(minor))} ${c.code}"
+
+/** "1234567.5" → "1,234,567.5", so big amounts read at a glance. */
+fun grouped(n: String): String {
+    val neg = n.startsWith("-")
+    val digits = n.removePrefix("-")
+    val whole = digits.substringBefore('.')
+    val rest = digits.substring(whole.length)
+    return (if (neg) "-" else "") + whole.reversed().chunked(3).joinToString(",").reversed() + rest
+}
 
 /** "12/20 18:30" in the phone's time zone. */
 fun shortWhen(millis: Long): String {
@@ -49,12 +61,19 @@ fun shortWhen(millis: Long): String {
     return "${t.month.ordinal + 1}/${t.day} ${hm(t.hour, t.minute)}"
 }
 
-fun categoryColor(c: ExpenseCategory): Color = when (c) {
-    ExpenseCategory.food, ExpenseCategory.shopping -> AppColors.coral
-    ExpenseCategory.transport -> AppColors.mizu
-    ExpenseCategory.lodging -> AppColors.wakatake
-    ExpenseCategory.ticket -> AppColors.yamabuki
-    ExpenseCategory.other -> AppColors.white
+/** A soft tint per category, behind its first letter. */
+fun categoryColor(c: ExpenseCategory): Color {
+    val scrap = Looks.scrapbook
+    return Color(
+        when (c) {
+            ExpenseCategory.food -> if (scrap) 0xFFFFE3D8 else 0xFFFFF1E6
+            ExpenseCategory.transport -> if (scrap) 0xFFDCEBFF else 0xFFEAF2FF
+            ExpenseCategory.lodging -> if (scrap) 0xFFDDF0DE else 0xFFE6F7EF
+            ExpenseCategory.ticket -> if (scrap) 0xFFFFF3C4 else 0xFFF3E8FF
+            ExpenseCategory.shopping -> if (scrap) 0xFFF5E1F0 else 0xFFFFE4EC
+            ExpenseCategory.other -> if (scrap) 0xFFEFE8DD else 0xFFF1F3F5
+        },
+    )
 }
 
 /** A trip's total in the base currency, or null when some stored expense can't be converted. */
@@ -63,15 +82,20 @@ private fun totalOrNull(data: TripData): Long? =
 
 @Composable
 fun ExpensesTab(data: TripData) {
-    val nav = LocalNav.current
-    InkButton("＋ 記一筆", { nav.push(Screen.ExpenseForm(data.trip.id, null)) }, Modifier.fillMaxWidth())
     if (data.expenses.isEmpty()) {
-        CenterMessage("還沒有支出，按上面記第一筆")
+        CenterMessage("還沒有支出，按下面的 ＋ 記第一筆")
         return
     }
-    InkCard(Modifier.fillMaxWidth(), fill = AppColors.yamabuki) {
+    HeroCard(Modifier.fillMaxWidth()) {
         val total = totalOrNull(data)
-        Txt(if (total == null) "總花費算不出來（有一筆資料有誤）" else "總花費 ${money(data.base, total)}", size = 20, bold = true)
+        Txt(if (Looks.scrapbook) "這趟一共花了" else "總花費", size = 14)
+        if (total == null) {
+            Txt("算不出來（有一筆資料有誤）", size = 20, bold = true)
+        } else {
+            Txt(money(data.base, total), size = 34, bold = true, maxLines = 1)
+            val people = data.members.size
+            if (people > 1) Txt("$people 人 · 每人約 ${money(data.base, total / people)}", size = 14)
+        }
     }
     data.expenses.forEach { e -> ExpenseRow(data, e) }
 }
@@ -83,7 +107,7 @@ private fun ExpenseRow(data: TripData, e: Expense) {
     InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.ExpenseForm(data.trip.id, e.id)) }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
-                Modifier.size(40.dp).border(2.dp, AppColors.ink, CircleShape).background(categoryColor(e.category), CircleShape),
+                Modifier.size(40.dp).border(AppShape.line, AppColors.line, CircleShape).background(categoryColor(e.category), CircleShape),
                 contentAlignment = Alignment.Center,
             ) { Txt(e.category.label.take(1)) }
             Column(Modifier.weight(1f)) {
@@ -95,7 +119,7 @@ private fun ExpenseRow(data: TripData, e: Expense) {
                     // Imported from a sheet row without an amount; easy to forget.
                     Txt("待補金額", bold = true, color = AppColors.error)
                 } else {
-                    Txt(if (cur == null) "${e.amountMinor} ${e.currency}" else money(cur, e.amountMinor), bold = true)
+                    Txt(if (cur == null) "${e.amountMinor} ${e.currency}" else money(cur, e.amountMinor), size = 18, bold = true)
                 }
                 if (e.currency != data.base.code) {
                     runCatching { baseTotal(e, data.base) }.getOrNull()?.let {
@@ -145,7 +169,13 @@ fun SettleTab(data: TripData) {
                         v > 0 -> "應收 ${money(base, v)}"
                         else -> "應付 ${money(base, -v)}"
                     },
-                    color = if (v < 0) AppColors.error else AppColors.ink,
+                    color = when {
+                        v < 0 -> AppColors.error
+                        v > 0 -> AppColors.good
+                        else -> AppColors.faint
+                    },
+                    size = 18,
+                    bold = true,
                     align = TextAlign.End,
                 )
             }
@@ -157,11 +187,11 @@ fun SettleTab(data: TripData) {
         InkCard(Modifier.fillMaxWidth()) { Txt("大家都結清了 🎉") }
     }
     transfers.forEach { t ->
-        InkCard(Modifier.fillMaxWidth(), fill = AppColors.mizu) {
+        InkCard(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f)) {
                     Txt("${data.nameOf(t.fromId)} → ${data.nameOf(t.toId)}", bold = true)
-                    Txt(money(base, t.amountMinor), size = 18)
+                    Txt(money(base, t.amountMinor), size = 22, bold = true)
                 }
                 InkButton("已轉帳", {
                     if (pending.isNotEmpty()) confirming = t

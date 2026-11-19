@@ -84,7 +84,7 @@ fun DateRangeDialog(
                                 val inside = s != null && e != null && d > s && d < e
                                 Box(
                                     Modifier.fillMaxWidth().aspectRatio(1f)
-                                        .then(if (edge) Modifier.border(2.dp, AppColors.ink, CircleShape) else Modifier)
+                                        .then(if (edge) Modifier.border(AppShape.line, AppColors.coral, CircleShape) else Modifier)
                                         .background(
                                             when {
                                                 edge -> AppColors.coral

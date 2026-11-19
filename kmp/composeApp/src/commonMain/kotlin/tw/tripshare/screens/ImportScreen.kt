@@ -232,7 +232,7 @@ private class ImportBar {
 private fun ImportBarView(bar: ImportBar) {
     val enabled = bar.parts.isNotEmpty()
     Column(Modifier.fillMaxWidth().background(AppColors.paper)) {
-        Box(Modifier.fillMaxWidth().height(AppShape.border).background(AppColors.ink))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(AppColors.line))
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Txt(
                 if (enabled) "已勾選：${bar.parts.joinToString("、")}" else "還沒勾選要匯入的資料",
@@ -242,7 +242,7 @@ private fun ImportBarView(bar: ImportBar) {
                 if (enabled) Box(Modifier.matchParentSize().offset(y = 4.dp).background(AppColors.ink, AppShape.pill))
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(AppShape.pill)
-                        .border(AppShape.border, if (enabled) AppColors.ink else AppColors.faint, AppShape.pill)
+                        .border(AppShape.border, AppColors.line, AppShape.pill)
                         .background(if (enabled) AppColors.coral else AppColors.paper, AppShape.pill)
                         .clickable(enabled = enabled, role = Role.Button, onClick = bar.onImport)
                         .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -610,7 +610,7 @@ private fun PickRow(
 ) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(AppShape.small)
-            .border(2.dp, if (warn) AppColors.error else AppColors.ink, AppShape.small)
+            .border(AppShape.line, if (warn) AppColors.error else AppColors.line, AppShape.small)
             .background(if (warn) Color(0xFFFBE3E1) else AppColors.white, AppShape.small)
             .clickable(enabled = enabled, role = Role.Checkbox, onClick = onToggle)
             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -618,7 +618,7 @@ private fun PickRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
-            Modifier.size(24.dp).border(2.dp, if (enabled) AppColors.ink else AppColors.faint, AppShape.tiny)
+            Modifier.size(24.dp).border(AppShape.line, AppColors.line, AppShape.tiny)
                 .background(if (checked) AppColors.wakatake else AppColors.white, AppShape.tiny),
             contentAlignment = Alignment.Center,
         ) { if (checked) Txt("✓", size = 14, bold = true) }

@@ -146,7 +146,7 @@ private fun InstallGuideDialog(env: InstallEnv, onDismiss: () -> Unit) {
 private fun Step(n: Int, text: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(
-            Modifier.size(28.dp).border(2.dp, AppColors.ink, CircleShape).background(AppColors.yamabuki, CircleShape),
+            Modifier.size(28.dp).border(AppShape.line, AppColors.line, CircleShape).background(AppColors.yamabuki, CircleShape),
             contentAlignment = Alignment.Center,
         ) { Txt("$n", size = 14) }
         Txt(text, Modifier.weight(1f))

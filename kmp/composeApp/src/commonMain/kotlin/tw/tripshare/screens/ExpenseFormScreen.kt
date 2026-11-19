@@ -1,12 +1,19 @@
 package tw.tripshare.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -15,11 +22,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import tw.tripshare.core.Calc
 import tw.tripshare.core.Currency
 import tw.tripshare.core.ExpenseCategory
 import tw.tripshare.core.ExpenseDraft
@@ -37,6 +48,10 @@ import tw.tripshare.nowMillis
 import tw.tripshare.today
 import tw.tripshare.ui.ActionRow
 import tw.tripshare.ui.AppColors
+import tw.tripshare.ui.AppShape
+import tw.tripshare.ui.InkCard
+import tw.tripshare.ui.Looks
+import tw.tripshare.ui.lifted
 import tw.tripshare.ui.CenterMessage
 import tw.tripshare.ui.CheckRow
 import tw.tripshare.ui.Chip
@@ -63,12 +78,19 @@ fun ExpenseFormScreen(tripId: String, expenseId: String?) {
         // Taken once, so live updates from friends don't overwrite what's being typed.
         val initial = remember {
             when {
-                expenseId == null -> ExpenseDraft(
-                    title = "", category = ExpenseCategory.food, amount = "", currency = data.base.code,
-                    base = data.base.code, rate = "1", payerId = data.me?.id ?: data.members.first().id,
-                    mode = SplitMode.equal, included = data.members.map { it.id }.toSet(), values = emptyMap(),
-                    occurredAt = nowMillis(), note = "",
-                )
+                expenseId == null -> {
+                    // Abroad, most expenses are in the same foreign currency: start from the last one's.
+                    val last = data.expenses.filter { runCatching { Currency.of(it.currency) }.isSuccess }
+                        .maxByOrNull { maxOf(it.updatedAt, it.occurredAt) }
+                    val cur = last?.currency ?: data.base.code
+                    ExpenseDraft(
+                        title = "", category = ExpenseCategory.food, amount = "", currency = cur,
+                        base = data.base.code, rate = if (cur == data.base.code) "1" else last?.rateToBase.orEmpty(),
+                        payerId = data.me?.id ?: data.members.first().id,
+                        mode = SplitMode.equal, included = data.members.map { it.id }.toSet(), values = emptyMap(),
+                        occurredAt = nowMillis(), note = "",
+                    )
+                }
                 existing != null -> ExpenseDraft.of(existing, data.base.code)
                 else -> null
             }
@@ -92,7 +114,10 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
 
     var title by remember { mutableStateOf(initial.title) }
     var category by remember { mutableStateOf(initial.category) }
-    var amount by remember { mutableStateOf(initial.amount) }
+    // What's typed on the keypad, e.g. "1280×2"; the amount is its result.
+    var expr by remember { mutableStateOf(initial.amount.replace(",", "")) }
+    var keypad by remember { mutableStateOf(isNew) }
+    val focus = LocalFocusManager.current
     var currency by remember { mutableStateOf(initial.currency) }
     var rate by remember { mutableStateOf(initial.rate) }
     var rateNote by remember { mutableStateOf<String?>(null) }
@@ -111,7 +136,8 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
 
     fun edited(block: () -> Unit) { block(); error = null }
 
-    fun onCurrency(code: String) {
+    /** Switches to [code] and looks up today's rate; [keep] stays when the lookup fails. */
+    fun onCurrency(code: String, keep: String = "") {
         currency = code
         rateNote = null
         if (code == base) { rate = "1"; return }
@@ -123,6 +149,9 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
             if (r != null) {
                 rate = r
                 rateNote = "今日參考匯率，可以改成刷卡實際匯率"
+            } else if (keep.isNotEmpty()) {
+                rate = keep
+                rateNote = "查不到今天的匯率，先用上一筆的"
             } else {
                 rate = ""
                 rateNote = "查不到匯率（沒網路？），請手動輸入"
@@ -130,12 +159,17 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
         }
     }
 
+    LaunchedEffect(Unit) { if (isNew && currency != base) onCurrency(currency, keep = rate) }
+
+    val cur = Currency.of(currency)
+    val amountMinor = Calc.minor(expr, cur)
+
     fun save() {
         if (saving) return
         val hmv = parseHm(time)
         if (hmv == null) { error = "時間格式要像 18:30"; return }
         val draft = initial.copy(
-            title = title, category = category, amount = amount, currency = currency, rate = rate,
+            title = title, category = category, amount = amountMinor?.let { cur.format(it) } ?: expr, currency = currency, rate = rate,
             payerId = payerId, mode = mode, included = included.filterValues { it }.keys,
             values = values.toMap(), note = note,
             occurredAt = localMillis(LocalDateTime(date.year, date.month, date.day, hmv.first, hmv.second)),
@@ -157,22 +191,26 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
         if (isNew) "記一筆" else "編輯",
         onBack = { nav.pop() },
         actions = { if (!isNew) TextAction("刪除", { picking = "delete" }, color = AppColors.error) },
+        bottom = if (keypad) ({ Keypad(cur.decimals, { k -> edited { expr = Calc.press(expr, k, cur.decimals) } }, { keypad = false }) }) else null,
     ) {
-        InkField(title, { edited { title = it } }, "項目，例如「一蘭拉麵」", maxLength = 40)
+        AmountBox(
+            expr, amountMinor, cur,
+            converted = if (currency != base && amountMinor != null) converted(cur.format(amountMinor), currency, base, rate) else null,
+            base = base,
+            active = keypad,
+            onTap = { focus.clearFocus(); keypad = true },
+            onCurrency = { picking = "currency" },
+        )
+        InkField(title, { edited { title = it } }, "項目，例如「一蘭拉麵」", maxLength = 40, onFocus = { keypad = false })
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ExpenseCategory.entries.forEach { c -> Chip(c.label, category == c, { category = c }) }
         }
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            InkField(amount, { edited { amount = it } }, "金額", Modifier.weight(1f), maxLength = 15, keyboard = KeyboardType.Decimal)
-            InkButton(currency, { picking = "currency" }, fill = AppColors.paper)
-        }
         if (currency != base) {
             InkField(
-                rate, { edited { rate = it } }, "1 $currency = ? $base" + if (fetchingRate) "（查詢中…）" else "",
-                maxLength = 18, keyboard = KeyboardType.Decimal,
+                rate, { edited { rate = it } }, "匯率：1 $currency = ? $base" + if (fetchingRate) "（查詢中…）" else "",
+                maxLength = 18, keyboard = KeyboardType.Decimal, onFocus = { keypad = false },
             )
             rateNote?.let { Txt(it, size = 13, color = AppColors.faint) }
-            converted(amount, currency, base, rate)?.let { Txt("約 $it $base") }
         }
         Txt("誰付的", size = 14, color = AppColors.faint)
         InkButton(data.nameOf(payerId), { picking = "payer" }, Modifier.fillMaxWidth(), fill = AppColors.paper)
@@ -197,6 +235,7 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
                         values[m.id].orEmpty(), { edited { values[m.id] = it } },
                         if (mode == SplitMode.exact) currency else "份", Modifier.width(120.dp),
                         maxLength = 15, keyboard = if (mode == SplitMode.exact) KeyboardType.Decimal else KeyboardType.Number,
+                        onFocus = { keypad = false },
                     )
                 }
             }
@@ -205,9 +244,12 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
         SectionTitle("什麼時候")
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             InkButton(shortDate(ymd(date)), { picking = "date" }, Modifier.weight(1f), fill = AppColors.paper)
-            InkField(time, { edited { time = it } }, "時間", Modifier.width(110.dp), maxLength = 5, keyboard = KeyboardType.Number)
+            InkField(
+                time, { edited { time = it } }, "時間", Modifier.width(110.dp), maxLength = 5, keyboard = KeyboardType.Number,
+                onFocus = { keypad = false },
+            )
         }
-        InkField(note, { note = it }, "備註（可不填）", maxLength = 200)
+        InkField(note, { note = it }, "備註（可不填）", maxLength = 200, onFocus = { keypad = false })
         error?.let { Txt(it, color = AppColors.error) }
         InkButton("儲存", ::save, Modifier.fillMaxWidth(), enabled = !saving)
     }
@@ -242,4 +284,73 @@ private fun converted(amount: String, from: String, to: String, rate: String): S
     val a = f.parse(amount) ?: return null
     val r = Rate.tryParse(rate) ?: return null
     return runCatching { t.format(convert(a, f, t, r)) }.getOrNull()
+}
+
+/**
+ * The amount, big: what's typed (when it's a sum), the result, and the result
+ * in the trip's currency. Tapping it brings the keypad back.
+ */
+@Composable
+private fun AmountBox(
+    expr: String,
+    minor: Long?,
+    cur: Currency,
+    converted: String?,
+    base: String,
+    active: Boolean,
+    onTap: () -> Unit,
+    onCurrency: () -> Unit,
+) {
+    InkCard(Modifier.fillMaxWidth(), onClick = onTap) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Txt("金額", Modifier.weight(1f), size = 14, color = AppColors.faint)
+            Chip("${cur.code} ▾", true, onCurrency, color = AppColors.yamabuki)
+        }
+        if (Calc.hasOperator(expr)) Txt(groupedExpr(expr), size = 16, color = AppColors.faint, maxLines = 1)
+        Txt(
+            when {
+                expr.isEmpty() -> "0"
+                minor != null -> grouped(cur.format(minor))
+                else -> groupedExpr(expr)
+            },
+            size = 40, bold = true, maxLines = 1,
+            color = if (expr.isEmpty() || !active && minor == null) AppColors.faint else AppColors.ink,
+        )
+        if (converted != null) Txt("≈ ${grouped(converted)} $base", size = 16, bold = true, color = AppColors.coral)
+    }
+}
+
+/** Thousands commas in each number of a sum, e.g. "12800+3500.5" → "12,800+3,500.5". */
+private fun groupedExpr(expr: String): String = NUMBER.replace(expr) { grouped(it.value) }
+
+private val NUMBER = Regex("""\d+(\.\d*)?""")
+
+/** The calculator keys, in place of the phone's keyboard while typing the amount. */
+@Composable
+private fun Keypad(decimals: Int, onKey: (String) -> Unit, onDone: () -> Unit) {
+    val rows = listOf(
+        listOf("7", "8", "9", "÷"),
+        listOf("4", "5", "6", "×"),
+        listOf("1", "2", "3", "−"),
+        listOf(if (decimals > 0) "." else "C", "0", "⌫", "+"),
+    )
+    Column(
+        Modifier.fillMaxWidth().background(AppColors.card).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        rows.forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { k ->
+                    val op = k in Calc.OPS
+                    Box(
+                        Modifier.weight(1f).height(50.dp).lifted(AppShape.small, elevation = 1.dp).clip(AppShape.small)
+                            .background(if (op) AppColors.yamabuki else AppColors.paper, AppShape.small)
+                            .clickable(role = Role.Button, onClickLabel = k) { onKey(k) },
+                        contentAlignment = Alignment.Center,
+                    ) { Txt(k, size = 22, bold = true, color = if (op && !Looks.scrapbook) AppColors.coral else AppColors.ink) }
+                }
+            }
+        }
+        InkButton("完成", onDone, Modifier.fillMaxWidth())
+    }
 }
