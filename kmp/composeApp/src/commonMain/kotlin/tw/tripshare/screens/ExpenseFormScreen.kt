@@ -40,6 +40,8 @@ import tw.tripshare.core.SplitMode
 import tw.tripshare.core.convert
 import tw.tripshare.core.hm
 import tw.tripshare.core.parseHm
+import tw.tripshare.core.parseYmd
+import tw.tripshare.core.tripDayNumber
 import tw.tripshare.core.shortDate
 import tw.tripshare.core.ymd
 import tw.tripshare.localDateTime
@@ -71,7 +73,7 @@ private val MODES = listOf(SplitMode.equal to "平均", SplitMode.exact to "指�
 
 /** Adds an expense when [expenseId] is null, otherwise edits or deletes it. */
 @Composable
-fun ExpenseFormScreen(tripId: String, expenseId: String?) {
+fun ExpenseFormScreen(tripId: String, expenseId: String?, date: String? = null) {
     val nav = LocalNav.current
     WithTrip(tripId) { data ->
         val existing = expenseId?.let { id -> data.expenses.firstOrNull { it.id == id } }
@@ -88,7 +90,7 @@ fun ExpenseFormScreen(tripId: String, expenseId: String?) {
                         base = data.base.code, rate = if (cur == data.base.code) "1" else last?.rateToBase.orEmpty(),
                         payerId = data.me?.id ?: data.members.first().id,
                         mode = SplitMode.equal, included = data.members.map { it.id }.toSet(), values = emptyMap(),
-                        occurredAt = nowMillis(), note = "",
+                        occurredAt = startTime(date), note = "",
                     )
                 }
                 existing != null -> ExpenseDraft.of(existing, data.base.code)
@@ -135,6 +137,10 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
     var picking by remember { mutableStateOf<String?>(null) }
 
     fun edited(block: () -> Unit) { block(); error = null }
+
+    /** "11/4（三） · 第 2 天", the trip day only when the date falls inside the trip. */
+    fun dayText(d: LocalDate) = shortDate(ymd(d)) +
+        (tripDayNumber(d, data.trip.startDate, data.trip.endDate)?.let { " · 第 $it 天" } ?: "")
 
     /** Switches to [code] and looks up today's rate; [keep] stays when the lookup fails. */
     fun onCurrency(code: String, keep: String = "") {
@@ -205,6 +211,14 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ExpenseCategory.entries.forEach { c -> Chip(c.label, category == c, { category = c }) }
         }
+        // Near the top, so filling in yesterday's receipts doesn't need a scroll.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            InkButton(dayText(date), { focus.clearFocus(); keypad = false; picking = "date" }, Modifier.weight(1f), fill = AppColors.paper)
+            InkField(
+                time, { edited { time = it } }, "時間", Modifier.width(110.dp), maxLength = 5, keyboard = KeyboardType.Number,
+                onFocus = { keypad = false },
+            )
+        }
         if (currency != base) {
             InkField(
                 rate, { edited { rate = it } }, "匯率：1 $currency = ? $base" + if (fetchingRate) "（查詢中…）" else "",
@@ -241,14 +255,6 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
             }
         }
 
-        SectionTitle("什麼時候")
-        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            InkButton(shortDate(ymd(date)), { picking = "date" }, Modifier.weight(1f), fill = AppColors.paper)
-            InkField(
-                time, { edited { time = it } }, "時間", Modifier.width(110.dp), maxLength = 5, keyboard = KeyboardType.Number,
-                onFocus = { keypad = false },
-            )
-        }
         InkField(note, { note = it }, "備註（可不填）", maxLength = 200, onFocus = { keypad = false })
         error?.let { Txt(it, color = AppColors.error) }
         InkButton("儲存", ::save, Modifier.fillMaxWidth(), enabled = !saving)
@@ -275,6 +281,17 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
             nav.pop()
         }, onDismiss = { picking = null })
     }
+}
+
+/**
+ * When a new expense starts: now, or the current time of day on [date]
+ * ("yyyy-MM-dd", from a day's ＋ on the 記帳 tab).
+ */
+private fun startTime(date: String?): Long {
+    val now = nowMillis()
+    val d = date?.let { runCatching { parseYmd(it) }.getOrNull() } ?: return now
+    val t = localDateTime(now)
+    return localMillis(LocalDateTime(d.year, d.month, d.day, t.hour, t.minute))
 }
 
 /** [amount] of [from] in [to] at [rate], formatted, or null while the inputs aren't valid. */

@@ -2,6 +2,17 @@ package tw.tripshare.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import tw.tripshare.core.ExpenseDay
+import tw.tripshare.core.groupByDay
+import tw.tripshare.core.shortDate
+import tw.tripshare.core.tripDayNumber
+import tw.tripshare.core.ymd
+import tw.tripshare.today
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,7 +108,72 @@ fun ExpensesTab(data: TripData) {
             if (people > 1) Txt("$people 人 · 每人約 ${money(data.base, total / people)}", size = 14)
         }
     }
-    data.expenses.forEach { e -> ExpenseRow(data, e) }
+    ExpenseDays(data)
+}
+
+/**
+ * The expenses by day, each day folding open and shut. Today (or the newest
+ * day, when nothing was spent today) starts open; what's open is remembered
+ * while editing an expense and coming back.
+ */
+@Composable
+private fun ExpenseDays(data: TripData) {
+    val nav = LocalNav.current
+    val days = groupByDay(data.expenses) { localDateTime(it).date }
+    val todayYmd = ymd(today())
+    // Days as "yyyy-MM-dd" joined by commas; null until the person folds anything.
+    var openText by rememberSaveable(data.trip.id) { mutableStateOf<String?>(null) }
+    val open: Set<String> = openText?.split(',')?.filter { it.isNotEmpty() }?.toSet()
+        ?: setOf(days.firstOrNull { ymd(it.date) == todayYmd }?.let { ymd(it.date) } ?: ymd(days.first().date))
+    fun setOpen(s: Set<String>) { openText = s.joinToString(",") }
+
+    val allOpen = days.all { ymd(it.date) in open }
+    SectionTitle("${days.size} 天 · ${data.expenses.size} 筆") {
+        TextAction(if (allOpen) "全部收起" else "全部展開", {
+            setOpen(if (allOpen) emptySet() else days.map { ymd(it.date) }.toSet())
+        }, color = AppColors.coral)
+    }
+    days.forEach { d ->
+        val key = ymd(d.date)
+        val isOpen = key in open
+        DayHeader(
+            data, d, isOpen,
+            onToggle = { setOpen(if (isOpen) open - key else open + key) },
+            onAdd = { nav.push(Screen.ExpenseForm(data.trip.id, null, key)) },
+        )
+        if (isOpen) d.expenses.forEach { e -> ExpenseRow(data, e) }
+    }
+}
+
+/** A day's date, its trip day, and what it cost; tapping folds the day. */
+@Composable
+private fun DayHeader(data: TripData, day: ExpenseDay, open: Boolean, onToggle: () -> Unit, onAdd: () -> Unit) {
+    val key = ymd(day.date)
+    val total = runCatching { day.expenses.sumOf { baseTotal(it, data.base) } }.getOrNull()
+    val n = tripDayNumber(day.date, data.trip.startDate, data.trip.endDate)
+    val pending = day.expenses.count { it.amountMinor == 0L }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).clip(AppShape.small)
+            .background(if (open) AppColors.yamabuki else AppColors.card, AppShape.small)
+            .clickable(role = Role.Button, onClickLabel = if (open) "收起" else "展開", onClick = onToggle)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Txt(if (open) "▾" else "▸", size = 16, bold = true)
+        Column(Modifier.weight(1f)) {
+            Txt(
+                shortDate(key) + (n?.let { " · 第 $it 天" } ?: "") + if (key == ymd(today())) " · 今天" else "",
+                bold = true, maxLines = 1,
+            )
+            Txt(
+                "${day.expenses.size} 筆" + (if (pending > 0) " · $pending 筆待補" else "") +
+                    (total?.let { " · ${money(data.base, it)}" } ?: ""),
+                size = 13, color = if (pending > 0) AppColors.error else AppColors.faint, maxLines = 1,
+            )
+        }
+        TextAction("＋ 這天", onAdd, color = AppColors.coral)
+    }
 }
 
 @Composable
