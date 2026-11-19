@@ -40,13 +40,13 @@
 - 清單：待辦、出發前、行李三種，大家共用，打勾會顯示是誰勾的；左滑刪除。出發前和行李清單是空的時候，可以一鍵加入常用項目。
 
 ### 發布
-- 照抱寶的方式：改 `pubspec.yaml` 的版本號並推上 `main`，CI 就把 Android APK 和 iOS 開發簽章版發到 Firebase App Distribution。
-- iPhone（2026-11-17 改）：不發 iOS app，改用網頁版，Safari「加入主畫面」。CI 在改版號時一起部署。iOS 開發簽章版的流程留著，用 repo 變數 `IOS_DISTRIBUTION` 開關。
+- 改 `kmp/version.properties` 的版本號並推上 `main`，CI 就把 Android APK 發到 Firebase App Distribution，並部署網頁版。
+- iPhone（2026-11-17 改）：不發 iOS app，改用網頁版，Safari「加入主畫面」。CI 在改版號時一起部署。原生 iOS 版不發。
 - 身分備份：0.4.0 以前建立的匿名身分，更新後在登入畫面綁定 Google 帳號（身分 ID 不變，旅程都在）。若那個 Google 帳號已綁在另一個身分上，兩者不能合併：目前身分沒有旅程就直接切過去，有旅程則列出會看不到的旅程讓本人選。沒綁的人請群主在成員頁「解除綁定」，再用新邀請碼加入、選回原本的名字。
 
 ## 視覺風格
 
-日系繪本風，可愛、簡約，只用淺色底（不做深色模式）。程式碼在 `lib/theme.dart`。
+日系繪本風，可愛、簡約，只用淺色底（不做深色模式）。程式碼在 `kmp/composeApp/src/commonMain/kotlin/tw/tripshare/ui/Theme.kt`。
 - 底色和紙白 `#FFFCF6`；3px 墨灰 `#3E3A39` 粗線框；大圓角（20）；平塗，不用漸層和陰影。
 - 配色：珊瑚粉 `#F2A497`、山吹黃 `#F6D27A`、水色 `#A8D3E6`、若竹綠 `#B9DAA5`。
 - 字型：Huninn（粉圓），隨 app 打包，出國沒網路也能正常顯示。

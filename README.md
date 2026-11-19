@@ -2,7 +2,7 @@
 
 給朋友一起用的旅遊 app：記帳、多幣別分帳、每日行程。Kotlin Compose Multiplatform（Android + 網頁）+ Firebase，程式在 `kmp/`。
 
-> 舊的 Flutter 版（`lib/`、`android/`、`ios/`、`web/`）已不再發布，留著備查，確認新版穩定後再刪。
+> 舊的 Flutter 版已在 2026-11 移除，需要時可從 git 歷史找回。App 圖示的 SVG 原稿在 `assets/icon/`。
 
 規格與資料模型：[docs/SPEC.md](docs/SPEC.md)
 
