@@ -134,3 +134,10 @@ fun AppTheme(content: @Composable () -> Unit) {
     val style = TextStyle(fontFamily = FontFamily(Font(Res.font.huninn)), color = AppColors.ink, fontSize = 16.sp)
     CompositionLocalProvider(LocalTextStyle provides style, content = content)
 }
+
+/**
+ * An emoji to put before (or after) a label: only in the scrapbook look,
+ * where it reads as a sticker. The minimal look stays text only.
+ */
+fun deco(emoji: String, before: Boolean = true): String =
+    if (!Looks.scrapbook) "" else if (before) "$emoji " else " $emoji"

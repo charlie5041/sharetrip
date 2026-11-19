@@ -1,5 +1,20 @@
 package tw.tripshare.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import tw.tripshare.ui.AppShape
+import tw.tripshare.ui.lifted
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,7 +42,6 @@ import tw.tripshare.ui.RoundAction
 import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.Looks
 import tw.tripshare.ui.Look
-import tw.tripshare.ui.Chip
 import tw.tripshare.ui.CenterMessage
 import tw.tripshare.ui.InkButton
 import tw.tripshare.ui.InkCard
@@ -77,9 +91,7 @@ fun TripListScreen() {
     }
     if (looks) {
         InkDialog("外觀", { looks = false }, buttons = { TextAction("完成", { looks = false }) }) {
-            Look.entries.forEach { l ->
-                Chip("${l.label}　${l.hint}", Looks.current == l, { Looks.set(l) }, Modifier.fillMaxWidth())
-            }
+            LookPicker()
             Txt("只會改這台裝置，朋友看到的不受影響。", size = 13, color = AppColors.faint)
         }
     }
@@ -98,6 +110,77 @@ private fun TripCard(trip: Trip, onClick: () -> Unit) {
                 Txt("${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}　·　${trip.baseCurrency} 結算", size = 14)
             }
             Tag(tripBadge(trip, today), if (upcoming) AppColors.yamabuki else AppColors.wakatake)
+        }
+    }
+}
+
+/** The 外觀 choices, drawn in the look in use: radio buttons in minimal, paper notes with a stamp in scrapbook. */
+@Composable
+private fun LookPicker() {
+    val scrap = Looks.scrapbook
+    Look.entries.forEachIndexed { i, l ->
+        val on = Looks.current == l
+        if (scrap) LookNote(l, on, tilt = if (i % 2 == 0) -1f else 1f) else LookRadio(l, on)
+    }
+}
+
+@Composable
+private fun LookRadio(look: Look, on: Boolean) {
+    val accent = AppColors.coral
+    val ring = if (on) accent else AppColors.faint
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(AppShape.small)
+            .selectable(selected = on, role = Role.RadioButton, onClick = { Looks.set(look) })
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            Modifier.size(24.dp).drawBehind {
+                drawCircle(ring, radius = size.minDimension / 2 - 1.dp.toPx(), style = Stroke(2.dp.toPx()))
+                if (on) drawCircle(accent, radius = 6.dp.toPx())
+            },
+        )
+        Column(Modifier.weight(1f)) {
+            Txt(look.label, size = 17, bold = on)
+            Txt(look.hint, size = 14, color = AppColors.faint)
+        }
+    }
+}
+
+@Composable
+private fun LookNote(look: Look, on: Boolean, tilt: Float) {
+    val stamp = AppColors.coral
+    val sticker = if (look == Look.scrapbook) "📒" else "🤍"
+    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(
+            Modifier.fillMaxWidth().rotate(tilt).lifted(AppShape.radius).clip(AppShape.radius)
+                .background(AppColors.card, AppShape.radius)
+                .then(if (on) Modifier.border(2.dp, stamp, AppShape.radius) else Modifier)
+                .selectable(selected = on, role = Role.RadioButton, onClick = { Looks.set(look) })
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                Modifier.size(42.dp).background(AppColors.yamabuki.copy(alpha = 0.45f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Txt(sticker, size = 20) }
+            Column(Modifier.weight(1f)) {
+                Txt(look.label, size = 18, bold = true)
+                Txt(look.hint, size = 14, color = AppColors.faint)
+            }
+            if (on) {
+                Box(
+                    Modifier.size(54.dp).rotate(-12f).drawBehind {
+                        drawCircle(
+                            stamp, radius = size.minDimension / 2 - 1.dp.toPx(),
+                            style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 3.dp.toPx()))),
+                        )
+                    },
+                    contentAlignment = Alignment.Center,
+                ) { Txt("使用中", size = 12, bold = true, color = stamp) }
+            }
         }
     }
 }
