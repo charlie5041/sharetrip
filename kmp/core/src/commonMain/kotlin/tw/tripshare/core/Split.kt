@@ -155,7 +155,15 @@ fun balances(
     for (e in expenses) {
         val totalBase = baseTotal(e, base)
         if (totalBase == 0L) continue
-        val shares = allocate(mul(totalBase, PRECISION), sharesInOriginal(e, order))
+        // Weights straight from the expense, not its rounded shares, which
+        // would carry the per-expense rounding back in.
+        sharesInOriginal(e, order) // Same validation as everywhere else.
+        val weights = LinkedHashMap<String, Long>()
+        for (id in order) {
+            val w = e.splits[id] ?: 0
+            if (w > 0) weights[id] = if (e.splitMode == SplitMode.equal) 1 else w
+        }
+        val shares = allocate(mul(totalBase, PRECISION), weights)
         credit(e.payerId, mul(totalBase, PRECISION))
         shares.forEach { (id, v) -> credit(id, -v) }
     }
