@@ -68,6 +68,7 @@ import tw.tripshare.ui.SectionTitle
 import tw.tripshare.ui.Tag
 import tw.tripshare.ui.TextAction
 import tw.tripshare.ui.Txt
+import tw.tripshare.ui.deco
 
 /** Runs a write in the background and says so if it fails. */
 @Composable
@@ -81,7 +82,7 @@ private fun rememberWriter(): (suspend () -> Unit) -> Unit {
 @Composable
 private fun MapAction(label: String, place: String?, mapUrl: String?) {
     val link = mapLink(place, mapUrl) ?: return
-    TextAction("📍 $label", { openUrl(link) })
+    TextAction("${deco("📍")}$label", { openUrl(link) })
 }
 
 // ---- Overview --------------------------------------------------------------
@@ -130,7 +131,7 @@ fun OverviewTab(data: TripData) {
     data.lodgings.forEach { LodgingCard(trip.id, it) }
 
     InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Import(trip.id)) }) {
-        Txt("📋 從試算表匯入", bold = true)
+        Txt("${deco("📋")}從試算表匯入", bold = true)
         Txt("把 Google 試算表或 Excel 上的花費、行程、住宿一次搬進來", size = 14, color = AppColors.faint)
     }
 }
@@ -148,7 +149,7 @@ private fun FlightCard(tripId: String, f: Flight) {
         }
     }
     InkCard(Modifier.fillMaxWidth(), fill = AppColors.yamabuki, onClick = { nav.push(Screen.FlightForm(tripId, f.id)) }) {
-        Txt("✈ " + listOfNotNull(f.airline, f.flightNo).joinToString(" "), bold = true)
+        Txt(deco("✈") + listOfNotNull(f.airline, f.flightNo).joinToString(" "), bold = true)
         Row(verticalAlignment = Alignment.CenterVertically) {
             End(f.fromCode, f.fromName, f.departDate, f.departTime, Modifier.weight(1f), end = false)
             Txt("→", size = 22)
@@ -163,7 +164,7 @@ private fun LodgingCard(tripId: String, l: Lodging) {
     val nav = LocalNav.current
     val nights = runCatching { parseYmd(l.checkIn).daysUntil(parseYmd(l.checkOut)) }.getOrDefault(0)
     InkCard(Modifier.fillMaxWidth(), fill = AppColors.wakatake, onClick = { nav.push(Screen.LodgingForm(tripId, l.id)) }) {
-        Txt("🛏 ${l.name}", bold = true)
+        Txt("${deco("🛏")}${l.name}", bold = true)
         Txt("${shortDate(l.checkIn)} 入住 → ${shortDate(l.checkOut)} 退房（$nights 晚）", size = 14)
         l.confirmation?.let { Txt("訂房編號：$it", size = 14) }
         l.address?.let { Txt(it, size = 14) }
@@ -299,7 +300,7 @@ fun ChecklistTab(data: TripData) {
     if (entries.isEmpty()) {
         if (kind.suggestions.isNotEmpty()) {
             val k = kind
-            InkButton("✨ 加入常用的「${k.label}」項目", { write { session.repo.addChecklistEntries(tripId, k, k.suggestions) } }, Modifier.fillMaxWidth(), fill = AppColors.paper)
+            InkButton("${deco("✨")}加入常用的「${k.label}」項目", { write { session.repo.addChecklistEntries(tripId, k, k.suggestions) } }, Modifier.fillMaxWidth(), fill = AppColors.paper)
         } else {
             Txt("還沒有項目，在下面輸入新增", Modifier.fillMaxWidth().padding(16.dp), align = TextAlign.Center, color = AppColors.faint)
         }

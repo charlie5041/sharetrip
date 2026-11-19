@@ -54,6 +54,7 @@ import tw.tripshare.ui.Screen
 import tw.tripshare.ui.SectionTitle
 import tw.tripshare.ui.TextAction
 import tw.tripshare.ui.Txt
+import tw.tripshare.ui.deco
 
 fun money(c: Currency, minor: Long) = "${grouped(c.format(minor))} ${c.code}"
 
@@ -260,7 +261,7 @@ fun SettleTab(data: TripData) {
 
     SectionTitle("怎麼轉帳")
     if (transfers.isEmpty()) {
-        InkCard(Modifier.fillMaxWidth()) { Txt("大家都結清了 🎉") }
+        InkCard(Modifier.fillMaxWidth()) { Txt("大家都結清了" + deco("🎉", before = false)) }
     }
     transfers.forEach { t ->
         InkCard(Modifier.fillMaxWidth()) {
