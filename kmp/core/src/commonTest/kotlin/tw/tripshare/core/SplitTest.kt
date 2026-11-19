@@ -130,6 +130,24 @@ class SplitTest {
         assertEquals(0, balances(members, expenses, emptyList(), twd).values.sum())
     }
 
+    @Test fun oddAmountsDoNotDriftTowardTheFirstMember() {
+        // Two people, every amount odd: the halves used to round the same way
+        // each time, so B ended up owing 0.5 less per expense.
+        val two = members.take(2)
+        val both = mapOf("a" to 1L, "b" to 1L)
+        val expenses = List(10) { exp(amount = 101, payer = "a", splits = both) } +
+            List(10) { exp(amount = 99, payer = "b", splits = both) }
+        // Exactly: B owes 10 × 50.5 − 10 × 49.5 = 10.
+        assertEquals(m("a" to 10, "b" to -10), balances(two, expenses, emptyList(), twd))
+    }
+
+    @Test fun roundingOnceStillSumsToZero() {
+        val net = balances(members, List(7) { exp(amount = 100, payer = "a") }, emptyList(), twd)
+        assertEquals(0, net.values.sum())
+        // Exactly a: +466.67, b and c: −233.33 each; each lands within one unit.
+        assertEquals(m("a" to 466, "b" to -233, "c" to -233), net)
+    }
+
     @Test fun transfersSettleWithAtMostNMinusOne() {
         val t = suggestTransfers(m("a" to 500, "b" to -200, "c" to -300))
         assertEquals(listOf(Transfer("c", "a", 300), Transfer("b", "a", 200)), t)
