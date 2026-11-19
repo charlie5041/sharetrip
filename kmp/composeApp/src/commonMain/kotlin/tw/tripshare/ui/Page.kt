@@ -19,6 +19,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
@@ -47,23 +51,45 @@ fun Page(
     actions: @Composable RowScope.() -> Unit = {},
     bottom: (@Composable () -> Unit)? = null,
     scroll: Boolean = true,
+    fab: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(AppColors.paper).safeDrawingPadding().imePadding()) {
+    Box(Modifier.fillMaxSize().background(AppColors.paper).paperDots().safeDrawingPadding().imePadding()) {
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().weight(1f)) {
                 TopBar(title, onBack, actions)
-                Column(
-                    Modifier.fillMaxWidth().weight(1f)
-                        .then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                        .padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    content = content,
-                )
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    Column(
+                        Modifier.fillMaxSize()
+                            .then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                            // Room for the cards' shadows, and for the floating button.
+                            .padding(horizontal = 16.dp).padding(top = 4.dp, bottom = if (fab != null) 96.dp else 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        content = content,
+                    )
+                    if (fab != null) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) { fab() }
+                }
                 bottom?.invoke()
             }
         }
         ToastHost(Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/** The scrapbook's dotted notebook paper; nothing in the minimal look. */
+private fun Modifier.paperDots(): Modifier {
+    if (!Looks.scrapbook) return this
+    val dot = AppColors.line
+    return drawBehind {
+        val step = 16.dp.toPx()
+        val points = ArrayList<Offset>()
+        var y = step / 2
+        while (y < size.height) {
+            var x = step / 2
+            while (x < size.width) { points.add(Offset(x, y)); x += step }
+            y += step
+        }
+        drawPoints(points, PointMode.Points, dot, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
     }
 }
 

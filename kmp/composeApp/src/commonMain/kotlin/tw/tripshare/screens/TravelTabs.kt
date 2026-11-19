@@ -243,9 +243,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.rail(first: Boolean
     val x = size.width / 2
     val dotY = 30.dp.toPx()
     val w = 3.dp.toPx()
-    drawLine(AppColors.ink, Offset(x, if (first) dotY else 0f), Offset(x, if (last) dotY else size.height), w)
+    drawLine(AppColors.line, Offset(x, if (first) dotY else 0f), Offset(x, if (last) dotY else size.height), w)
     drawCircle(if (mustGo) AppColors.coral else AppColors.yamabuki, 8.dp.toPx(), Offset(x, dotY))
-    drawCircle(AppColors.ink, 8.dp.toPx(), Offset(x, dotY), style = Stroke(w))
+    drawCircle(AppColors.card, 8.dp.toPx(), Offset(x, dotY), style = Stroke(w))
 }
 
 // ---- Checklists ------------------------------------------------------------
@@ -277,11 +277,11 @@ fun ChecklistTab(data: TripData) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Txt("完成 $done / ${entries.size}", size = 14)
             Box(
-                Modifier.weight(1f).height(12.dp).border(2.dp, AppColors.ink, AppShape.pill).background(AppColors.white, AppShape.pill),
+                Modifier.weight(1f).height(12.dp).background(AppColors.line, AppShape.pill),
             ) {
                 Box(
                     Modifier.fillMaxHeight().fillMaxWidth(done.toFloat() / entries.size)
-                        .background(AppColors.wakatake, AppShape.pill),
+                        .background(AppColors.good, AppShape.pill),
                 )
             }
         }

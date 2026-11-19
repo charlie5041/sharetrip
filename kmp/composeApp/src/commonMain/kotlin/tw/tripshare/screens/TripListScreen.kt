@@ -25,6 +25,9 @@ import tw.tripshare.ui.ActionRow
 import tw.tripshare.ui.InkDialog
 import tw.tripshare.ui.RoundAction
 import tw.tripshare.ui.AppColors
+import tw.tripshare.ui.Looks
+import tw.tripshare.ui.Look
+import tw.tripshare.ui.Chip
 import tw.tripshare.ui.CenterMessage
 import tw.tripshare.ui.InkButton
 import tw.tripshare.ui.InkCard
@@ -42,6 +45,7 @@ fun TripListScreen() {
     val trips by remember { session.repo.watchMyTrips() }.collectAsState(null)
     var menu by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf(false) }
+    var looks by remember { mutableStateOf(false) }
     var account by remember { mutableStateOf(false) }
     Page(
         title = "我的旅程",
@@ -66,8 +70,17 @@ fun TripListScreen() {
     if (menu) {
         InkDialog("同遊", { menu = false }, buttons = { TextAction("關閉", { menu = false }) }) {
             ActionRow("備份我的身分", Google.linkedEmail()?.let { "已綁定 Google $it" } ?: "還沒綁定，換手機會找不回旅程") { menu = false; account = true }
+            ActionRow("外觀：${Looks.current.label}", "換成${Look.entries.filter { it != Looks.current }.joinToString("、") { "「${it.label}」" }}") { menu = false; looks = true }
             ActionRow("回報問題", "哪裡怪怪的，直接告訴開發者") { menu = false; feedback = true }
             Txt("版本 ${Reporter.VERSION}", size = 13, color = AppColors.faint)
+        }
+    }
+    if (looks) {
+        InkDialog("外觀", { looks = false }, buttons = { TextAction("完成", { looks = false }) }) {
+            Look.entries.forEach { l ->
+                Chip("${l.label}　${l.hint}", Looks.current == l, { Looks.set(l) }, Modifier.fillMaxWidth())
+            }
+            Txt("只會改這台裝置，朋友看到的不受影響。", size = 13, color = AppColors.faint)
         }
     }
     if (feedback) FeedbackDialog { feedback = false }
