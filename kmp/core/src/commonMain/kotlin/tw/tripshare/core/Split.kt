@@ -129,6 +129,15 @@ fun sharesInBase(e: Expense, base: Currency, order: List<String>): Map<String, L
 }
 
 /**
+ * Fractions of a base minor unit [balances] keeps while adding up. Rounding
+ * each expense on its own always handed the odd unit to the same member
+ * (the first in order), so over many odd amounts the error piled up on one
+ * side; summing at this finer scale and rounding once keeps the result
+ * within one unit of the exact answer.
+ */
+private const val PRECISION = 10_000L
+
+/**
  * Net position of every member in base minor units: positive means the
  * others owe them. The values always sum to zero.
  */
@@ -144,15 +153,48 @@ fun balances(
     fun credit(id: String, v: Long) { net[id] = add(net[id] ?: 0, v) }
 
     for (e in expenses) {
-        val shares = sharesInBase(e, base, order)
-        credit(e.payerId, shares.values.fold(0L, ::add))
+        val totalBase = baseTotal(e, base)
+        if (totalBase == 0L) continue
+        // Weights straight from the expense, not its rounded shares, which
+        // would carry the per-expense rounding back in.
+        sharesInOriginal(e, order) // Same validation as everywhere else.
+        val weights = LinkedHashMap<String, Long>()
+        for (id in order) {
+            val w = e.splits[id] ?: 0
+            if (w > 0) weights[id] = if (e.splitMode == SplitMode.equal) 1 else w
+        }
+        val shares = allocate(mul(totalBase, PRECISION), weights)
+        credit(e.payerId, mul(totalBase, PRECISION))
         shares.forEach { (id, v) -> credit(id, -v) }
     }
     for (s in settlements) {
-        credit(s.fromId, s.amountMinor)
-        credit(s.toId, -s.amountMinor)
+        credit(s.fromId, mul(s.amountMinor, PRECISION))
+        credit(s.toId, -mul(s.amountMinor, PRECISION))
     }
-    return net
+    return roundToUnits(net)
+}
+
+/**
+ * [scaled] (summing to zero, in 1/[PRECISION] units) rounded to whole units
+ * that still sum to zero: everyone is rounded down, then those who lost the
+ * most get one unit back, ties in member order.
+ */
+private fun roundToUnits(scaled: Map<String, Long>): Map<String, Long> {
+    val keys = scaled.keys.toList()
+    val out = LinkedHashMap<String, Long>()
+    val rem = LongArray(keys.size)
+    keys.forEachIndexed { i, k ->
+        val v = scaled.getValue(k)
+        out[k] = v.floorDiv(PRECISION)
+        rem[i] = v.mod(PRECISION)
+    }
+    val missing = -out.values.fold(0L, ::add)
+    val byRemainder = keys.indices.sortedWith(compareByDescending<Int> { rem[it] }.thenBy { it })
+    for (j in 0 until missing.toInt()) {
+        val k = keys[byRemainder[j]]
+        out[k] = out.getValue(k) + 1
+    }
+    return out
 }
 
 data class Transfer(val fromId: String, val toId: String, val amountMinor: Long) {
