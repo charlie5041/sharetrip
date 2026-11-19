@@ -55,11 +55,13 @@ import tw.tripshare.ui.AppColors
 import tw.tripshare.ui.AppShape
 import tw.tripshare.ui.CheckRow
 import tw.tripshare.ui.Chip
+import tw.tripshare.ui.HeroCard
 import tw.tripshare.ui.InkButton
 import tw.tripshare.ui.InkCard
 import tw.tripshare.ui.InkField
 import tw.tripshare.ui.LocalNav
 import tw.tripshare.ui.LocalToasts
+import tw.tripshare.ui.Looks
 import tw.tripshare.ui.RoundAction
 import tw.tripshare.ui.Screen
 import tw.tripshare.ui.SectionTitle
@@ -97,7 +99,15 @@ fun OverviewTab(data: TripData) {
         ended -> "旅程已結束" to "辛苦了"
         else -> "旅行中" to "第 ${1 - days} 天"
     }
-    InkCard(Modifier.fillMaxWidth()) {
+    if (!Looks.scrapbook) {
+        // The minimal look keeps the top plain: no illustration, the countdown in big type.
+        HeroCard(Modifier.fillMaxWidth()) {
+            Txt("${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}", size = 14)
+            Txt(trip.name, size = 24, bold = true)
+            Txt(label, Modifier.padding(top = 10.dp), size = 14)
+            Txt(big, size = 34, bold = true)
+        }
+    } else InkCard(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             TripScene(trip.name)
             Txt(trip.name, size = 26, bold = true, align = TextAlign.Center)
