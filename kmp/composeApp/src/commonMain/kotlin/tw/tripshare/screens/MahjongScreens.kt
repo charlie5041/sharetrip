@@ -110,7 +110,23 @@ private fun currencyOf(g: MahjongGame): Currency = runCatching { Currency.of(g.c
 @Composable
 fun MahjongListScreen(tripId: String) {
     val nav = LocalNav.current
+    val session = LocalSession.current
+    val toasts = LocalToasts.current
     WithTrip(tripId) { data ->
+        var deleting by remember { mutableStateOf<MahjongGame?>(null) }
+        deleting?.let { g ->
+            ConfirmDialog(
+                "刪除這一場？",
+                if (data.isSettled(g)) "每一筆和記帳裡這場的麻將紀錄都會刪掉，結算回到打之前的樣子。" else "每一筆都會一起刪掉，不會影響結算。",
+                "刪除",
+                onConfirm = {
+                    session.background.launch {
+                        runCatching { session.repo.deleteMahjong(tripId, g.id) }.onFailure { toasts.show("沒有刪除成功：${it.message}") }
+                    }
+                },
+                onDismiss = { deleting = null },
+            )
+        }
         Page(
             "麻將計點",
             onBack = { nav.pop() },
@@ -127,7 +143,7 @@ fun MahjongListScreen(tripId: String) {
                 val cur = currencyOf(g)
                 val hands = data.handsOf(g)
                 val scores = Mahjong.scores(g, hands)
-                InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Mahjong(tripId, g.id)) }) {
+                SwipeToDelete(onDelete = { deleting = g }) { InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Mahjong(tripId, g.id)) }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Txt(deco("🀄") + gameDate(g), Modifier.weight(1f), bold = true)
                         Txt(
@@ -139,7 +155,7 @@ fun MahjongListScreen(tripId: String) {
                         scores.entries.joinToString("　") { (id, v) -> "${data.nameOf(id)} ${signed(cur, v)}" },
                         size = 14, color = AppColors.faint,
                     )
-                }
+                } }
             }
         }
     }
@@ -290,9 +306,9 @@ fun MahjongScreen(tripId: String, gameId: String) {
                     ActionRowLite("加人", "有人中途加入輪流上桌") { menu = false; adding = true }
                 }
                 ActionRowLite("所有場次", "之前打過的也在這裡") { menu = false; nav.push(Screen.MahjongList(tripId)) }
-                ActionRowLite("刪除這場", if (settled) "要先撤回結算" else "連同每一筆一起刪掉") {
+                ActionRowLite("刪除這場", if (settled) "連同每一筆和記帳裡的麻將紀錄一起刪掉" else "連同每一筆一起刪掉") {
                     menu = false
-                    if (settled) toasts.show("這場已經寫進結算，要先撤回才能刪") else deletingGame = true
+                    deletingGame = true
                 }
             }
         }
@@ -302,10 +318,16 @@ fun MahjongScreen(tripId: String, gameId: String) {
             }, onDismiss = { deletingHand = null })
         }
         if (deletingGame) {
-            ConfirmDialog("刪除這一場？", "每一筆都會一起刪掉，不會影響結算。", "刪除", onConfirm = {
-                write("沒有刪除成功") { session.repo.deleteMahjong(tripId, gameId) }
-                nav.pop()
-            }, onDismiss = { deletingGame = false })
+            ConfirmDialog(
+                "刪除這一場？",
+                if (settled) "每一筆和記帳裡這場的麻將紀錄都會刪掉，結算回到打之前的樣子。" else "每一筆都會一起刪掉，不會影響結算。",
+                "刪除",
+                onConfirm = {
+                    write("沒有刪除成功") { session.repo.deleteMahjong(tripId, gameId) }
+                    nav.pop()
+                },
+                onDismiss = { deletingGame = false },
+            )
         }
         if (adding) {
             InkDialog("加人", { adding = false }, buttons = { TextAction("關閉", { adding = false }) }) {

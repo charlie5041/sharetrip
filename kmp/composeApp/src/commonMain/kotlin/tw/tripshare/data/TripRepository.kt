@@ -284,9 +284,10 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
 
     suspend fun deleteMahjongHand(tripId: String, id: String) = sub(tripId, "mahjongHands").document(id).delete()
 
-    /** Deletes a game with its hands. */
+    /** Deletes a game with its hands and whatever it wrote into 記帳. */
     suspend fun deleteMahjong(tripId: String, gameId: String) {
         val batch = db.batch()
+        sub(tripId, "expenses").where { "mahjongId" equalTo gameId }.get().documents.forEach { batch.delete(it.reference) }
         sub(tripId, "mahjongHands").where { "gameId" equalTo gameId }.get().documents.forEach { batch.delete(it.reference) }
         batch.delete(sub(tripId, "mahjong").document(gameId))
         batch.commit()
