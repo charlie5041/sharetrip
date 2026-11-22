@@ -210,7 +210,7 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
         )
         InkField(title, { edited { title = it } }, "項目，例如「一蘭拉麵」", maxLength = 40, onFocus = { keypad = false })
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ExpenseCategory.entries.forEach { c -> Chip(c.label, category == c, { category = c }) }
+            ExpenseCategory.entries.filter { it != ExpenseCategory.mahjong }.forEach { c -> Chip(c.label, category == c, { category = c }) }
         }
         // Near the top, so filling in yesterday's receipts doesn't need a scroll.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

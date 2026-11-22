@@ -323,7 +323,7 @@ describe('joining with an invite', () => {
 describe('inside a trip', () => {
   // Members have rules of their own, under 'the member list'.
   for (const sub of ['expenses', 'settlements', 'items', 'checklist',
-                     'flights', 'lodgings']) {
+                     'flights', 'lodgings', 'mahjong', 'mahjongHands']) {
     test(`members read and write ${sub}; others cannot`, async () => {
       await seedTrip(['alice']);
       await assertSucceeds(setDoc(doc(db('alice'), `trips/t1/${sub}/x`), { a: 1 }));

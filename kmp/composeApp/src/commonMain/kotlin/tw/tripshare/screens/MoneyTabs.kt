@@ -95,13 +95,17 @@ fun categoryColor(c: ExpenseCategory): Color {
             ExpenseCategory.ticket -> if (scrap) 0xFFFFF3C4 else 0xFFF3E8FF
             ExpenseCategory.shopping -> if (scrap) 0xFFF5E1F0 else 0xFFFFE4EC
             ExpenseCategory.other -> if (scrap) 0xFFEFE8DD else 0xFFF1F3F5
+            ExpenseCategory.mahjong -> if (scrap) 0xFFDDF0DE else 0xFFE6F7EF
         },
     )
 }
 
 /** A trip's total in the base currency, or null when some stored expense can't be converted. */
-private fun totalOrNull(data: TripData): Long? =
-    runCatching { data.expenses.sumOf { baseTotal(it, data.base) } }.getOrNull()
+private fun totalOrNull(data: TripData): Long? = spent(data.expenses, data)
+
+/** What [expenses] add to 總花費: everything except what was kept out of it, like mahjong winnings. */
+private fun spent(expenses: List<Expense>, data: TripData): Long? =
+    runCatching { expenses.filter { it.inTotal }.sumOf { baseTotal(it, data.base) } }.getOrNull()
 
 @Composable
 fun ExpensesTab(data: TripData) {
@@ -161,7 +165,7 @@ private fun ExpenseDays(data: TripData) {
 @Composable
 private fun DayHeader(data: TripData, day: ExpenseDay, open: Boolean, onToggle: () -> Unit, onAdd: () -> Unit) {
     val key = ymd(day.date)
-    val total = runCatching { day.expenses.sumOf { baseTotal(it, data.base) } }.getOrNull()
+    val total = spent(day.expenses, data)
     val n = tripDayNumber(day.date, data.trip.startDate, data.trip.endDate)
     val pending = day.expenses.count { it.amountMinor == 0L }
     Row(
@@ -204,7 +208,10 @@ private fun ExpenseRow(data: TripData, e: Expense) {
         }, onDismiss = { confirming = false })
     }
     SwipeToDelete(onDelete = { confirming = true }) {
-        InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.ExpenseForm(data.trip.id, e.id)) }) {
+        InkCard(Modifier.fillMaxWidth(), onClick = {
+            // A mahjong result is edited in its game, which writes it again.
+            nav.push(e.mahjongId?.let { Screen.Mahjong(data.trip.id, it) } ?: Screen.ExpenseForm(data.trip.id, e.id))
+        }) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
                     Modifier.size(40.dp).border(AppShape.line, AppColors.line, CircleShape).background(categoryColor(e.category), CircleShape),
@@ -212,7 +219,11 @@ private fun ExpenseRow(data: TripData, e: Expense) {
                 ) { Txt(e.category.label.take(1)) }
                 Column(Modifier.weight(1f)) {
                     Txt(e.title, bold = true, maxLines = 2)
-                    Txt("${data.nameOf(e.payerId)} 付 · ${shortWhen(e.occurredAt)}", size = 13, color = AppColors.faint)
+                    Txt(
+                        (if (e.mahjongId != null) "${data.nameOf(e.payerId)} 贏" else "${data.nameOf(e.payerId)} 付") +
+                            " · ${shortWhen(e.occurredAt)}" + if (e.inTotal) "" else " · 不算總花費",
+                        size = 13, color = AppColors.faint,
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     if (e.amountMinor == 0L) {
@@ -240,7 +251,7 @@ private fun ExpenseRow(data: TripData, e: Expense) {
  * can't swipe.
  */
 @Composable
-private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+internal fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
     val scope = rememberCoroutineScope()
     val offset = remember { Animatable(0f) }
     var width by remember { mutableIntStateOf(0) }

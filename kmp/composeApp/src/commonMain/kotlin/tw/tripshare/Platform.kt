@@ -71,5 +71,9 @@ expect fun openInExternalBrowser()
 expect fun loadFlag(key: String): Boolean
 expect fun saveFlag(key: String, value: Boolean)
 
+/** A per-device short text that survives restarts; null when unset. Saving null clears it. */
+expect fun loadText(key: String): String?
+expect fun saveText(key: String, value: String?)
+
 /** The phone asks apps to keep still (accessibility). */
 expect fun prefersReducedMotion(): Boolean

@@ -167,7 +167,7 @@ service cloud.firestore {
       }
       match /{sub}/{docId} {
         allow read, write: if sub in ['expenses', 'settlements', 'items', 'checklist',
-                        'flights', 'lodgings']
+                        'flights', 'lodgings', 'mahjong', 'mahjongHands']
           && isMember(tripId);
       }
     }

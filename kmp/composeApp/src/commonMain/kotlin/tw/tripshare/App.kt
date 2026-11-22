@@ -33,6 +33,11 @@ import tw.tripshare.screens.FlightFormScreen
 import tw.tripshare.screens.ItemFormScreen
 import tw.tripshare.screens.LodgingFormScreen
 import tw.tripshare.screens.TripScreen
+import tw.tripshare.screens.MahjongHandScreen
+import tw.tripshare.screens.MahjongListScreen
+import tw.tripshare.screens.MahjongNewScreen
+import tw.tripshare.screens.MahjongScreen
+import tw.tripshare.screens.resumeMahjong
 import tw.tripshare.ui.AppTheme
 import tw.tripshare.ui.BackPress
 import tw.tripshare.ui.CenterMessage
@@ -116,7 +121,7 @@ fun App() {
                 }
             } else {
                 // A new navigator per account, so nothing from another identity survives.
-                val nav = remember(s.repo.uid) { Navigator(Screen.TripList) }
+                val nav = remember(s.repo.uid) { Navigator(Screen.TripList).also(::resumeMahjong) }
                 // Keeps each screen's rememberSaveable state while others sit on top of it.
                 val saved = rememberSaveableStateHolder()
                 remember(nav, saved) { nav.onDrop = { saved.removeState(it) } }
@@ -136,6 +141,10 @@ fun App() {
                             is Screen.FlightForm -> FlightFormScreen(screen.tripId, screen.flightId)
                             is Screen.LodgingForm -> LodgingFormScreen(screen.tripId, screen.lodgingId)
                             is Screen.Import -> ImportScreen(screen.tripId)
+                            is Screen.MahjongList -> MahjongListScreen(screen.tripId)
+                            is Screen.MahjongNew -> MahjongNewScreen(screen.tripId)
+                            is Screen.Mahjong -> MahjongScreen(screen.tripId, screen.gameId)
+                            is Screen.MahjongHandForm -> MahjongHandScreen(screen.tripId, screen.gameId, screen.handId)
                         }
                     }
                 }
