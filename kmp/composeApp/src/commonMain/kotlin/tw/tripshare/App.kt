@@ -25,7 +25,6 @@ import tw.tripshare.screens.ImportScreen
 import tw.tripshare.screens.JoinScreen
 import tw.tripshare.screens.LocalSession
 import tw.tripshare.screens.LoginScreen
-import tw.tripshare.data.Google
 import tw.tripshare.screens.Session
 import tw.tripshare.screens.TripFormScreen
 import tw.tripshare.screens.TripListScreen
@@ -53,8 +52,8 @@ private var firebaseStarted = false
 
 /**
  * Starts Firebase and restores this device's account. Null when nobody is
- * signed in: 同遊 needs a Google account, so nobody is signed in anonymously
- * any more (identities from before that are linked on the login screen).
+ * signed in yet: the login screen then offers Google or a guest
+ * (anonymous) account, which can link Google later and keep its uid.
  */
 private suspend fun startSession(restart: () -> Unit): Session? {
     if (!firebaseStarted) {
@@ -104,10 +103,7 @@ fun App() {
         CompositionLocalProvider(LocalToasts provides toasts) {
             val s = session
             if (signedOut) {
-                LoginScreen(anonymous = null, onSignedIn = restart)
-            } else if (s != null && Google.linkedEmail() == null) {
-                // From before Google was required: link it, keeping its uid and trips.
-                LoginScreen(anonymous = s.repo, onSignedIn = restart)
+                LoginScreen(onSignedIn = restart)
             } else if (s == null) {
                 Page("同遊") {
                     if (failed) {

@@ -2,12 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Signed in with Google. Anonymous accounts (from before Google was
-    // required) are refused until the app links them to a Google account;
-    // linking keeps the uid, so their trips are waiting for them.
+    // Signed in, either with Google or as a guest (Firebase anonymous
+    // sign-in). A guest can later link a Google account from the app; linking
+    // keeps the uid, so their trips stay theirs.
     function signedIn() {
       return request.auth != null
-        && 'google.com' in request.auth.token.firebase.identities;
+        && (request.auth.token.firebase.sign_in_provider in ['google.com', 'anonymous']
+            || 'google.com' in request.auth.token.firebase.identities);
     }
     function me() { return request.auth.uid; }
 
