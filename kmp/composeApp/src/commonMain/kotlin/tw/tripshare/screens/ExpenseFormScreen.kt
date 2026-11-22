@@ -67,6 +67,7 @@ import tw.tripshare.ui.LocalToasts
 import tw.tripshare.ui.Page
 import tw.tripshare.ui.SectionTitle
 import tw.tripshare.ui.TextAction
+import tw.tripshare.ui.TimeDialog
 import tw.tripshare.ui.Txt
 
 private val MODES = listOf(SplitMode.equal to "平均", SplitMode.exact to "指定金額", SplitMode.shares to "份數")
@@ -214,10 +215,7 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
         // Near the top, so filling in yesterday's receipts doesn't need a scroll.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             InkButton(dayText(date), { focus.clearFocus(); keypad = false; picking = "date" }, Modifier.weight(1f), fill = AppColors.paper)
-            InkField(
-                time, { edited { time = it } }, "時間", Modifier.width(110.dp), maxLength = 5, keyboard = KeyboardType.Number,
-                onFocus = { keypad = false },
-            )
+            InkButton(time, { focus.clearFocus(); keypad = false; picking = "time" }, Modifier.width(110.dp), fill = AppColors.paper)
         }
         if (currency != base) {
             InkField(
@@ -263,6 +261,10 @@ private fun ExpenseForm(data: TripData, initial: ExpenseDraft, isNew: Boolean) {
     when (picking) {
         "currency" -> InkDialog("幣別", { picking = null }, buttons = { TextAction("取消", { picking = null }) }) {
             Currency.all.forEach { c -> ActionRow("${c.name} ${c.code}") { picking = null; onCurrency(c.code) } }
+        }
+        "time" -> {
+            val (h, m) = parseHm(time) ?: (12 to 0)
+            TimeDialog(h, m, onDone = { hh, mm -> edited { time = hm(hh, mm) }; picking = null }, onDismiss = { picking = null })
         }
         "payer" -> InkDialog("誰付的", { picking = null }, buttons = { TextAction("取消", { picking = null }) }) {
             data.members.forEach { m -> ActionRow(m.name) { payerId = m.id; picking = null } }

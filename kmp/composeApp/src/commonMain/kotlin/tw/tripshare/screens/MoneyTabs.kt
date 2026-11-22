@@ -1,6 +1,17 @@
 package tw.tripshare.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import tw.tripshare.ui.onColor
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
@@ -180,31 +191,79 @@ private fun DayHeader(data: TripData, day: ExpenseDay, open: Boolean, onToggle: 
 @Composable
 private fun ExpenseRow(data: TripData, e: Expense) {
     val nav = LocalNav.current
+    val session = LocalSession.current
+    val toasts = LocalToasts.current
     val cur = runCatching { Currency.of(e.currency) }.getOrNull()
-    InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.ExpenseForm(data.trip.id, e.id)) }) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                Modifier.size(40.dp).border(AppShape.line, AppColors.line, CircleShape).background(categoryColor(e.category), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Txt(e.category.label.take(1)) }
-            Column(Modifier.weight(1f)) {
-                Txt(e.title, bold = true, maxLines = 2)
-                Txt("${data.nameOf(e.payerId)} 付 · ${shortWhen(e.occurredAt)}", size = 13, color = AppColors.faint)
+    var confirming by remember { mutableStateOf(false) }
+    if (confirming) {
+        ConfirmDialog("刪除「${e.title}」？", "刪掉後大家的結算會跟著改。", "刪除", onConfirm = {
+            confirming = false
+            session.background.launch {
+                runCatching { session.repo.deleteExpense(data.trip.id, e.id) }.onFailure { toasts.show("沒有刪除成功：${it.message}") }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                if (e.amountMinor == 0L) {
-                    // Imported from a sheet row without an amount; easy to forget.
-                    Txt("待補金額", bold = true, color = AppColors.error)
-                } else {
-                    Txt(if (cur == null) "${e.amountMinor} ${e.currency}" else money(cur, e.amountMinor), size = 18, bold = true)
+        }, onDismiss = { confirming = false })
+    }
+    SwipeToDelete(onDelete = { confirming = true }) {
+        InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.ExpenseForm(data.trip.id, e.id)) }) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier.size(40.dp).border(AppShape.line, AppColors.line, CircleShape).background(categoryColor(e.category), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Txt(e.category.label.take(1)) }
+                Column(Modifier.weight(1f)) {
+                    Txt(e.title, bold = true, maxLines = 2)
+                    Txt("${data.nameOf(e.payerId)} 付 · ${shortWhen(e.occurredAt)}", size = 13, color = AppColors.faint)
                 }
-                if (e.currency != data.base.code) {
-                    runCatching { baseTotal(e, data.base) }.getOrNull()?.let {
-                        Txt("≈ ${money(data.base, it)}", size = 13, color = AppColors.faint)
+                Column(horizontalAlignment = Alignment.End) {
+                    if (e.amountMinor == 0L) {
+                        // Imported from a sheet row without an amount; easy to forget.
+                        Txt("待補金額", bold = true, color = AppColors.error)
+                    } else {
+                        Txt(if (cur == null) "${e.amountMinor} ${e.currency}" else money(cur, e.amountMinor), size = 18, bold = true)
+                    }
+                    if (e.currency != data.base.code) {
+                        runCatching { baseTotal(e, data.base) }.getOrNull()?.let {
+                            Txt("≈ ${money(data.base, it)}", size = 13, color = AppColors.faint)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * Drag [content] to the right to delete it: a red 刪除 shows underneath, and
+ * letting go past a third of the width (or with a quick flick) calls
+ * [onDelete], which asks before anything is removed. The row slides back
+ * either way. Deleting from the edit screen still works for anyone who
+ * can't swipe.
+ */
+@Composable
+private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val offset = remember { Animatable(0f) }
+    var width by remember { mutableIntStateOf(0) }
+    val drag = rememberDraggableState { d ->
+        scope.launch { offset.snapTo((offset.value + d).coerceIn(0f, width.toFloat())) }
+    }
+    Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
+        if (offset.value > 0f) {
+            Box(
+                Modifier.matchParentSize().clip(AppShape.radius).background(AppColors.error, AppShape.radius).padding(start = 20.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) { Txt("刪除", bold = true, color = onColor(AppColors.error)) }
+        }
+        Box(
+            Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.draggable(
+                drag, Orientation.Horizontal,
+                onDragStopped = { velocity ->
+                    val far = offset.value > width / 3f || (velocity > 1500f && offset.value > 0f)
+                    offset.animateTo(0f)
+                    if (far) onDelete()
+                },
+            ),
+        ) { content() }
     }
 }
 
