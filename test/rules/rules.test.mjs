@@ -37,8 +37,8 @@ before(async () => {
 after(() => env.cleanup());
 beforeEach(() => env.clearFirestore());
 
-// Every person signs in with Google; an anonymous account (from before
-// that) has no identities until the app links one.
+// People sign in with Google or as a guest; a guest (anonymous account)
+// has no identities until the app links Google.
 const db = (uid) => env.authenticatedContext(uid, {
   firebase: { sign_in_provider: 'google.com', identities: { 'google.com': [`g-${uid}`] } },
 }).firestore();
@@ -375,14 +375,25 @@ describe('error reports', () => {
   });
 });
 
-describe('anonymous accounts', () => {
-  test('are refused everywhere until linked to Google', async () => {
+describe('guests (anonymous accounts)', () => {
+  test('use the app like anyone signed in with Google', async () => {
     await seedTrip(['alice']);
-    await assertFails(getDoc(doc(anonymousAccount('alice'), 'trips/t1')));
-    await assertFails(getDoc(doc(anonymousAccount('alice'), 'trips/t1/expenses/e1')));
-    await assertFails(setDoc(doc(anonymousAccount('carol'), 'trips/t2'), trip('carol')));
-    await assertFails(setDoc(doc(anonymousAccount('carol'), 'users/carol'), { nickname: 'C' }));
-    // Linking keeps the uid, so the same person reads the trip again.
+    await assertSucceeds(getDoc(doc(anonymousAccount('alice'), 'trips/t1')));
+    await assertSucceeds(getDoc(doc(anonymousAccount('alice'), 'trips/t1/expenses/e1')));
+    await assertSucceeds(setDoc(doc(anonymousAccount('carol'), 'trips/t2'), trip('carol')));
+    await assertSucceeds(setDoc(doc(anonymousAccount('carol'), 'users/carol'), { nickname: 'C' }));
+    // Still only their own trips and their own user doc.
+    await assertFails(getDoc(doc(anonymousAccount('carol'), 'trips/t1')));
+    await assertFails(setDoc(doc(anonymousAccount('carol'), 'users/alice'), { nickname: 'A' }));
+    // Linking Google keeps the uid, so the same person reads the trip again.
     await assertSucceeds(getDoc(doc(db('alice'), 'trips/t1')));
+  });
+
+  test('other sign-in methods are refused', async () => {
+    await seedTrip(['alice']);
+    const other = env.authenticatedContext('alice', {
+      firebase: { sign_in_provider: 'password', identities: { email: ['a@example.com'] } },
+    }).firestore();
+    await assertFails(getDoc(doc(other, 'trips/t1')));
   });
 });
