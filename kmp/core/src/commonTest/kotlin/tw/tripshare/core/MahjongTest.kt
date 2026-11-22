@@ -25,6 +25,19 @@ class MahjongTest {
         assertEquals(mapOf("a" to -90L, "b" to -90L, "d" to -90L, "c" to 270L), Mahjong.deltas(game, hand("c", null, 2)))
     }
 
+    @Test fun selfDrawnOnlyTheTablePays() {
+        val five = game.copy(players = listOf("a", "b", "c", "d", "e"))
+        val h = hand("c", null, 2).copy(table = listOf("a", "c", "d", "e"))
+        assertEquals(mapOf("a" to -90L, "d" to -90L, "e" to -90L, "c" to 270L), Mahjong.deltas(five, h))
+        val s = Mahjong.scores(five, listOf(h, hand("b", "a", 1).copy(table = listOf("a", "b", "c", "d"))))
+        assertEquals(mapOf("a" to -160L, "b" to 70L, "c" to 270L, "d" to -90L, "e" to -90L), s)
+        assertEquals(0L, s.values.sum())
+    }
+
+    @Test fun oldHandsWithoutATableSeatEveryone() {
+        assertEquals(listOf("a", "b", "c", "d"), hand("c", null, 2).seated(game))
+    }
+
     @Test fun scoresAddUpAndSumToZero() {
         val s = Mahjong.scores(game, hands)
         assertEquals(listOf("a", "b", "c", "d"), s.keys.toList())
@@ -61,7 +74,7 @@ class MahjongTest {
 
     @Test fun roundTripsThroughMaps() {
         assertEquals(game, MahjongGame.fromMap("g", game.toMap()))
-        val h = hand("c", null, 2)
+        val h = hand("c", null, 2).copy(table = listOf("a", "b", "c", "d"))
         val back = MahjongHand.fromMap(h.id, h.toMap())
         assertEquals(h, back)
         assertNull(back.loserId)

@@ -29,7 +29,8 @@
 
 ### 麻將計點（0.6.0 加入）
 - 入口在「記帳」分頁右上的「⋯」：有進行中的一場就直接回到計分板，否則開新的一場或看所有場次。
-- 開一場：從旅程成員選 3–4 位上桌，填「底」和「每台」，用旅程的結算幣別。
+- 開一場：從旅程成員選要打的人（至少 3 位，人數不限），填「底」和「每台」，用旅程的結算幣別。中途可從「⋯ → 加人」加入。
+- 超過 4 位時輪流上桌：每一筆先選「這局誰在桌上」（3–4 位，預設沿用上一筆），自摸只由同桌的人付，沒上桌的人那筆不輸不贏。
 - 記一筆：誰胡、放槍或自摸、誰放槍、幾台。台數由玩家自己算好（莊、連莊都算在內），app 不判台，不記流局。
   - 放槍：放槍的人付「底 + 台數 × 每台」。自摸：其他每家各付一份。
 - 計分板：每人累計輸贏（加總恆為 0），每一筆可點開修改、左滑刪除。右上「＋ 記帳」可暫時去記別的帳，存好回到計分板。
@@ -140,7 +141,7 @@ trips/{tripId}/checklist/{id}
   order: int
 
 trips/{tripId}/mahjong/{id}          // 麻將計點的一場
-  players: string[]                 // memberId，座位順序
+  players: string[]                 // 參加的 memberId（可超過 4 位，輪流上桌）
   baseMinor, perTaiMinor: int       // 底、每台（currency 的最小單位）
   currency: string                  // 開場時的結算幣別
   startedAt: int
@@ -150,6 +151,7 @@ trips/{tripId}/mahjongHands/{id}     // 一筆
   gameId: string
   winnerId: string
   loserId: string?                  // null = 自摸
+  table: string[]                   // 這局在桌上的人（舊資料沒有 = 全部參加者）
   tai: int
   at: int
   createdBy: string

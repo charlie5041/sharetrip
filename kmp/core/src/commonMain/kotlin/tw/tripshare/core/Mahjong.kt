@@ -8,7 +8,10 @@ package tw.tripshare.core
  */
 data class MahjongGame(
     val id: String,
-    /** memberIds, in seat order. */
+    /**
+     * Everyone in the game, in the order they were picked. More than four
+     * may take turns; who sits at the table is recorded per hand.
+     */
     val players: List<String>,
     val baseMinor: Long,
     val perTaiMinor: Long,
@@ -50,8 +53,16 @@ data class MahjongHand(
     val tai: Int,
     val at: Long,
     val createdBy: String,
+    /**
+     * Who sat at the table for this hand, the winner included. Empty for
+     * hands from before people could take turns: everyone in the game sat.
+     */
+    val table: List<String> = emptyList(),
 ) {
     val selfDrawn: Boolean get() = loserId == null
+
+    /** Who sat at the table, falling back to the whole game for old hands. */
+    fun seated(game: MahjongGame): List<String> = table.ifEmpty { game.players }
 
     fun toMap(): Doc = mapOf(
         "gameId" to gameId,
@@ -60,6 +71,7 @@ data class MahjongHand(
         "tai" to tai.toLong(),
         "at" to at,
         "createdBy" to createdBy,
+        "table" to table,
     )
 
     companion object {
@@ -71,6 +83,7 @@ data class MahjongHand(
             tai = m.long("tai").toInt(),
             at = m.long("at"),
             createdBy = m.str("createdBy"),
+            table = m.strings("table"),
         )
     }
 }
@@ -79,11 +92,11 @@ object Mahjong {
     /**
      * What [hand] moves, per player: the winner gains, payers lose.
      * 放槍: the one who discarded pays the price. 自摸: every other player
-     * at the table pays it.
+     * at the table pays it; whoever sat out this hand pays nothing.
      */
     fun deltas(game: MahjongGame, hand: MahjongHand): Map<String, Long> {
         val price = game.price(hand.tai)
-        val payers = hand.loserId?.let { listOf(it) } ?: game.players.filter { it != hand.winnerId }
+        val payers = hand.loserId?.let { listOf(it) } ?: hand.seated(game).filter { it != hand.winnerId }
         val out = LinkedHashMap<String, Long>()
         payers.forEach { out[it] = -price }
         out[hand.winnerId] = mul(price, payers.size.toLong())
