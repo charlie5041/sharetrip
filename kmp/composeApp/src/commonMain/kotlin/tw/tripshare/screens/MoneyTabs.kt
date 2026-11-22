@@ -233,7 +233,7 @@ private fun ExpenseRow(data: TripData, e: Expense) {
 }
 
 /**
- * Drag [content] to the right to delete it: a red 刪除 shows underneath, and
+ * Drag [content] to the left to delete it: a red 刪除 shows underneath, and
  * letting go past a third of the width (or with a quick flick) calls
  * [onDelete], which asks before anything is removed. The row slides back
  * either way. Deleting from the edit screen still works for anyone who
@@ -245,20 +245,20 @@ private fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit)
     val offset = remember { Animatable(0f) }
     var width by remember { mutableIntStateOf(0) }
     val drag = rememberDraggableState { d ->
-        scope.launch { offset.snapTo((offset.value + d).coerceIn(0f, width.toFloat())) }
+        scope.launch { offset.snapTo((offset.value + d).coerceIn(-width.toFloat(), 0f)) }
     }
     Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
-        if (offset.value > 0f) {
+        if (offset.value < 0f) {
             Box(
-                Modifier.matchParentSize().clip(AppShape.radius).background(AppColors.error, AppShape.radius).padding(start = 20.dp),
-                contentAlignment = Alignment.CenterStart,
+                Modifier.matchParentSize().clip(AppShape.radius).background(AppColors.error, AppShape.radius).padding(end = 20.dp),
+                contentAlignment = Alignment.CenterEnd,
             ) { Txt("刪除", bold = true, color = onColor(AppColors.error)) }
         }
         Box(
             Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.draggable(
                 drag, Orientation.Horizontal,
                 onDragStopped = { velocity ->
-                    val far = offset.value > width / 3f || (velocity > 1500f && offset.value > 0f)
+                    val far = offset.value < -width / 3f || (velocity < -1500f && offset.value < 0f)
                     offset.animateTo(0f)
                     if (far) onDelete()
                 },
