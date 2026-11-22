@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -143,7 +144,7 @@ fun MahjongListScreen(tripId: String) {
                 val cur = currencyOf(g)
                 val hands = data.handsOf(g)
                 val scores = Mahjong.scores(g, hands)
-                SwipeToDelete(onDelete = { deleting = g }) { InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Mahjong(tripId, g.id)) }) {
+                key(g.id) { SwipeToDelete(onDelete = { deleting = g }) { InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Mahjong(tripId, g.id)) }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Txt(deco("🀄") + gameDate(g), Modifier.weight(1f), bold = true)
                         Txt(
@@ -155,7 +156,7 @@ fun MahjongListScreen(tripId: String) {
                         scores.entries.joinToString("　") { (id, v) -> "${data.nameOf(id)} ${signed(cur, v)}" },
                         size = 14, color = AppColors.faint,
                     )
-                } }
+                } } }
             }
         }
     }
@@ -293,7 +294,7 @@ fun MahjongScreen(tripId: String, gameId: String) {
                         }
                     }
                 }
-                if (settled) row() else SwipeToDelete(onDelete = { deletingHand = h }) { row() }
+                key(h.id) { if (settled) row() else SwipeToDelete(onDelete = { deletingHand = h }) { row() } }
             }
             if (!settled && hands.isNotEmpty()) {
                 InkButton("結束這場，寫進結算", { finishing = true }, Modifier.fillMaxWidth(), fill = AppColors.card)

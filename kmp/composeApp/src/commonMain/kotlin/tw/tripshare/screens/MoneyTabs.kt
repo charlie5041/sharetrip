@@ -1,13 +1,14 @@
 package tw.tripshare.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -157,7 +158,8 @@ private fun ExpenseDays(data: TripData) {
             onToggle = { setOpen(if (isOpen) open - key else open + key) },
             onAdd = { nav.push(Screen.ExpenseForm(data.trip.id, null, key)) },
         )
-        if (isOpen) d.expenses.forEach { e -> ExpenseRow(data, e) }
+        // Keyed, so a row's swipe and its question stay with that expense when the list changes.
+        if (isOpen) d.expenses.forEach { e -> key(e.id) { ExpenseRow(data, e) } }
     }
 }
 
@@ -200,12 +202,31 @@ private fun ExpenseRow(data: TripData, e: Expense) {
     val cur = runCatching { Currency.of(e.currency) }.getOrNull()
     var confirming by remember { mutableStateOf(false) }
     if (confirming) {
-        ConfirmDialog("刪除「${e.title}」？", "刪掉後大家的結算會跟著改。", "刪除", onConfirm = {
-            confirming = false
-            session.background.launch {
-                runCatching { session.repo.deleteExpense(data.trip.id, e.id) }.onFailure { toasts.show("沒有刪除成功：${it.message}") }
-            }
-        }, onDismiss = { confirming = false })
+        val game = e.mahjongId
+        val amount = cur?.let { money(it, e.amountMinor) } ?: "${e.amountMinor} ${e.currency}"
+        if (game != null) {
+            // One row of a game's result; taking out only one would leave the others owing half a game.
+            val rows = data.expenses.count { it.mahjongId == game }
+            ConfirmDialog(
+                "撤回這場麻將的結算？",
+                "「${e.title}」寫進結算的 $rows 筆麻將紀錄會一起刪掉，結算回到打之前的樣子。計分板還在，可以改完再寫一次。",
+                "撤回",
+                onConfirm = {
+                    confirming = false
+                    session.background.launch {
+                        runCatching { session.repo.unsettleMahjong(data.trip.id, game) }.onFailure { toasts.show("沒有撤回成功：${it.message}") }
+                    }
+                },
+                onDismiss = { confirming = false },
+            )
+        } else {
+            ConfirmDialog("刪除「${e.title}」？", "${data.nameOf(e.payerId)} 付的 $amount。刪掉後大家的結算會跟著改。", "刪除", onConfirm = {
+                confirming = false
+                session.background.launch {
+                    runCatching { session.repo.deleteExpense(data.trip.id, e.id) }.onFailure { toasts.show("沒有刪除成功：${it.message}") }
+                }
+            }, onDismiss = { confirming = false })
+        }
     }
     SwipeToDelete(onDelete = { confirming = true }) {
         InkCard(Modifier.fillMaxWidth(), onClick = {
@@ -249,29 +270,35 @@ private fun ExpenseRow(data: TripData, e: Expense) {
  * [onDelete], which asks before anything is removed. The row slides back
  * either way. Deleting from the edit screen still works for anyone who
  * can't swipe.
+ *
+ * The offset is plain state changed in place while dragging: launching a
+ * coroutine per drag step let a late step cancel the slide back, which
+ * left rows stuck half open and sometimes skipped the question.
  */
 @Composable
 internal fun SwipeToDelete(onDelete: () -> Unit, content: @Composable () -> Unit) {
-    val scope = rememberCoroutineScope()
-    val offset = remember { Animatable(0f) }
+    var offset by remember { mutableFloatStateOf(0f) }
     var width by remember { mutableIntStateOf(0) }
-    val drag = rememberDraggableState { d ->
-        scope.launch { offset.snapTo((offset.value + d).coerceIn(-width.toFloat(), 0f)) }
-    }
+    val drag = rememberDraggableState { d -> offset = (offset + d).coerceIn(-width.toFloat(), 0f) }
     Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
-        if (offset.value < 0f) {
+        if (offset < 0f) {
             Box(
                 Modifier.matchParentSize().clip(AppShape.radius).background(AppColors.error, AppShape.radius).padding(end = 20.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) { Txt("刪除", bold = true, color = onColor(AppColors.error)) }
         }
         Box(
-            Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.draggable(
+            Modifier.offset { IntOffset(offset.roundToInt(), 0) }.draggable(
                 drag, Orientation.Horizontal,
                 onDragStopped = { velocity ->
-                    val far = offset.value < -width / 3f || (velocity < -1500f && offset.value < 0f)
-                    offset.animateTo(0f)
+                    val far = offset < -width / 3f || (velocity < -1500f && offset < 0f)
+                    // Ask first, then slide back, so a cancelled slide can't eat the question.
                     if (far) onDelete()
+                    try {
+                        animate(offset, 0f) { v, _ -> offset = v }
+                    } finally {
+                        offset = 0f
+                    }
                 },
             ),
         ) { content() }
