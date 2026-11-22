@@ -17,6 +17,8 @@ import tw.tripshare.core.InviteError
 import tw.tripshare.core.InviteException
 import tw.tripshare.core.ItineraryItem
 import tw.tripshare.core.Lodging
+import tw.tripshare.core.MahjongGame
+import tw.tripshare.core.MahjongHand
 import tw.tripshare.core.Member
 import tw.tripshare.core.Settlement
 import tw.tripshare.core.Trip
@@ -172,7 +174,7 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
 
     /** Deletes the trip and everything in it. Owner only. */
     suspend fun dissolveTrip(tripId: String) {
-        for (name in listOf("expenses", "settlements", "items", "flights", "lodgings", "checklist", "members")) {
+        for (name in listOf("expenses", "settlements", "items", "flights", "lodgings", "checklist", "mahjong", "mahjongHands", "members")) {
             sub(tripId, name).get().documents.chunked(400).forEach { chunk ->
                 val batch = db.batch()
                 chunk.forEach { batch.delete(it.reference) }
@@ -259,6 +261,51 @@ class TripRepository(private val db: FirebaseFirestore, val uid: String) {
     }
 
     suspend fun deleteSettlement(tripId: String, id: String) = sub(tripId, "settlements").document(id).delete()
+
+    // ---- 麻將計點 -------------------------------------------------------------
+
+    fun watchMahjongGames(tripId: String): Flow<List<MahjongGame>> =
+        sub(tripId, "mahjong").watch(MahjongGame::fromMap).map { l -> l.sortedByDescending { it.startedAt } }
+
+    fun watchMahjongHands(tripId: String): Flow<List<MahjongHand>> =
+        sub(tripId, "mahjongHands").watch(MahjongHand::fromMap).map { l -> l.sortedBy { it.at } }
+
+    /** A fresh game id, so the scoreboard can open before the write reaches the server. */
+    fun newMahjongId(tripId: String): String = sub(tripId, "mahjong").document.id
+
+    suspend fun saveMahjongGame(tripId: String, game: MahjongGame) =
+        sub(tripId, "mahjong").document(game.id).set(game.toMap() + ("createdBy" to game.createdBy.ifEmpty { uid }))
+
+    /** Creates [h] when its id is empty, otherwise replaces it. */
+    suspend fun saveMahjongHand(tripId: String, h: MahjongHand) {
+        val data = h.toMap() + ("createdBy" to h.createdBy.ifEmpty { uid })
+        if (h.id.isEmpty()) sub(tripId, "mahjongHands").add(data) else sub(tripId, "mahjongHands").document(h.id).set(data)
+    }
+
+    suspend fun deleteMahjongHand(tripId: String, id: String) = sub(tripId, "mahjongHands").document(id).delete()
+
+    /** Deletes a game with its hands. */
+    suspend fun deleteMahjong(tripId: String, gameId: String) {
+        val batch = db.batch()
+        sub(tripId, "mahjongHands").where { "gameId" equalTo gameId }.get().documents.forEach { batch.delete(it.reference) }
+        batch.delete(sub(tripId, "mahjong").document(gameId))
+        batch.commit()
+    }
+
+    /** Writes a finished game's result into 結算, all at once. */
+    suspend fun settleMahjong(tripId: String, expenses: List<Expense>) {
+        val now = nowMillis()
+        val batch = db.batch()
+        expenses.forEach { e -> batch.set(sub(tripId, "expenses").document, e.toMap() + mapOf("updatedAt" to now, "createdBy" to uid)) }
+        batch.commit()
+    }
+
+    /** Takes a game's result back out of 結算, so the game can go on. */
+    suspend fun unsettleMahjong(tripId: String, gameId: String) {
+        val batch = db.batch()
+        sub(tripId, "expenses").where { "mahjongId" equalTo gameId }.get().documents.forEach { batch.delete(it.reference) }
+        batch.commit()
+    }
 
     // ---- Itinerary, flights, lodging, checklists ---------------------------
 

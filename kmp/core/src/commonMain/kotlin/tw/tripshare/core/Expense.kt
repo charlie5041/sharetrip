@@ -4,6 +4,9 @@ enum class SplitMode { equal, exact, shares }
 
 enum class ExpenseCategory(val label: String) {
     food("餐飲"), transport("交通"), lodging("住宿"), ticket("門票"), shopping("購物"), other("其他"),
+
+    /** Written by 麻將計點 when a game ends; not offered in the expense form. */
+    mahjong("麻將"),
 }
 
 /** One payment by one member, split among some members. */
@@ -31,6 +34,10 @@ data class Expense(
     val createdBy: String,
     val updatedAt: Long,
     val note: String? = null,
+    /** False keeps it out of 總花費 (e.g. mahjong winnings); balances count it either way. */
+    val inTotal: Boolean = true,
+    /** The 麻將計點 game this expense settles, if any. */
+    val mahjongId: String? = null,
 ) {
     fun toMap(): Doc = mapOf(
         "title" to title,
@@ -45,7 +52,8 @@ data class Expense(
         "note" to note,
         "createdBy" to createdBy,
         "updatedAt" to updatedAt,
-    )
+    ) + (if (inTotal) emptyMap() else mapOf("inTotal" to false)) +
+        (mahjongId?.let { mapOf("mahjongId" to it) } ?: emptyMap())
 
     companion object {
         fun fromMap(id: String, m: Doc) = Expense(
@@ -62,6 +70,8 @@ data class Expense(
             note = m.strOrNull("note"),
             createdBy = m.str("createdBy"),
             updatedAt = m.long("updatedAt"),
+            inTotal = m.boolOr("inTotal", true),
+            mahjongId = m.strOrNull("mahjongId"),
         )
     }
 }

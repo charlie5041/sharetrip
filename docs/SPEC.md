@@ -27,6 +27,15 @@
 - 標記「已轉帳」：記一筆還款，淨額跟著更新。
 - 尾數：除不盡的最小單位，分給「被捨去最多」的人一人多 1（一樣多時依成員順序），保證加總等於總額，不會憑空多出或少掉 1 元。
 
+### 麻將計點（0.6.0 加入）
+- 入口在「記帳」分頁右上的「⋯」：有進行中的一場就直接回到計分板，否則開新的一場或看所有場次。
+- 開一場：從旅程成員選 3–4 位上桌，填「底」和「每台」，用旅程的結算幣別。
+- 記一筆：誰胡、放槍或自摸、誰放槍、幾台。台數由玩家自己算好（莊、連莊都算在內），app 不判台，不記流局。
+  - 放槍：放槍的人付「底 + 台數 × 每台」。自摸：其他每家各付一份。
+- 計分板：每人累計輸贏（加總恆為 0），每一筆可點開修改、左滑刪除。右上「＋ 記帳」可暫時去記別的帳，存好回到計分板。
+- 打牌中關掉 App 再開，會直接回到那場的計分板；按返回離開或寫進結算後就不再自動回去。
+- 結束這場：才問「要算進總花費嗎？」（預設不算進）。結果寫成「麻將」類的記帳，每位贏家一筆、由輸家按金額分攤，所以結算的誰欠誰剛好等於輸贏；選「不算進」時這些記帳不加進總花費和每天小計。要改分數就在那場按「撤回」，記帳裡的麻將紀錄會刪掉，改完再寫一次。
+
 ### 行程
 - 按天列出項目：時間（可空）、標題、地點、地圖連結、備註；同一天內可拖曳排序。
 - 地點一鍵開啟 Google Maps / Apple 地圖。不嵌入地圖、不自動排路線。
@@ -129,6 +138,23 @@ trips/{tripId}/checklist/{id}
   done: bool
   doneBy: string?                   // 勾選者的名字
   order: int
+
+trips/{tripId}/mahjong/{id}          // 麻將計點的一場
+  players: string[]                 // memberId，座位順序
+  baseMinor, perTaiMinor: int       // 底、每台（currency 的最小單位）
+  currency: string                  // 開場時的結算幣別
+  startedAt: int
+  createdBy: string
+
+trips/{tripId}/mahjongHands/{id}     // 一筆
+  gameId: string
+  winnerId: string
+  loserId: string?                  // null = 自摸
+  tai: int
+  at: int
+  createdBy: string
+
+// 麻將寫進結算的 expenses 另有：category "mahjong"、mahjongId、inTotal（false 時不算總花費）
 
 invites/{code}
   tripId: string

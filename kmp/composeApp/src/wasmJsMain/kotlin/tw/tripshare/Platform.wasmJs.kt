@@ -131,6 +131,15 @@ actual fun loadFlag(key: String): Boolean = jsLoadFlag(key)
 
 actual fun saveFlag(key: String, value: Boolean) = jsSaveFlag(key, value)
 
+private fun jsLoadText(key: String): String = js("(() => { try { return localStorage.getItem(key) ?? ''; } catch (_) { return ''; } })()")
+
+private fun jsSaveText(key: String, value: String): Unit =
+    js("{ try { if (value === '') localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (_) {} }")
+
+actual fun loadText(key: String): String? = jsLoadText(key).ifEmpty { null }
+
+actual fun saveText(key: String, value: String?) = jsSaveText(key, value.orEmpty())
+
 private fun jsReducedMotion(): Boolean = js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
 
 actual fun prefersReducedMotion(): Boolean = jsReducedMotion()

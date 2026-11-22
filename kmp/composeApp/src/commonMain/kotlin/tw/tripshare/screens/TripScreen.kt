@@ -35,6 +35,8 @@ import tw.tripshare.core.Expense
 import tw.tripshare.core.Flight
 import tw.tripshare.core.ItineraryItem
 import tw.tripshare.core.Lodging
+import tw.tripshare.core.MahjongGame
+import tw.tripshare.core.MahjongHand
 import tw.tripshare.core.Member
 import tw.tripshare.core.Settlement
 import tw.tripshare.core.Trip
@@ -48,6 +50,10 @@ import tw.tripshare.ui.Looks
 import tw.tripshare.ui.Page
 import tw.tripshare.ui.Screen
 import tw.tripshare.ui.Txt
+import tw.tripshare.ui.InkDialog
+import tw.tripshare.ui.RoundAction
+import tw.tripshare.ui.TextAction
+import androidx.compose.runtime.mutableStateOf
 
 /** Everything a trip's screens read, gathered from the live streams. */
 data class TripData(
@@ -59,11 +65,16 @@ data class TripData(
     val flights: List<Flight>,
     val lodgings: List<Lodging>,
     val checklist: List<ChecklistEntry>,
+    val mahjongGames: List<MahjongGame>,
+    val mahjongHands: List<MahjongHand>,
     val myUid: String,
 ) {
     val me: Member? get() = members.firstOrNull { it.uid == myUid }
     val isOwner: Boolean get() = trip.ownerUid == myUid
     val base: Currency get() = Currency.of(trip.baseCurrency)
+    /** A game is settled once its result is in 記帳; deleting those expenses opens it again. */
+    fun isSettled(game: MahjongGame): Boolean = expenses.any { it.mahjongId == game.id }
+    fun handsOf(game: MahjongGame): List<MahjongHand> = mahjongHands.filter { it.gameId == game.id }
     fun nameOf(memberId: String): String = members.firstOrNull { it.id == memberId }?.name ?: "（已移除）"
 }
 
@@ -95,6 +106,9 @@ fun rememberTripData(tripId: String): Load<TripData> {
     val flights by remember(tripId) { repo.watchFlights(tripId).retryBriefly().catch { } }.collectAsState(null)
     val lodgings by remember(tripId) { repo.watchLodgings(tripId).retryBriefly().catch { } }.collectAsState(null)
     val checklist by remember(tripId) { repo.watchChecklist(tripId).retryBriefly().catch { } }.collectAsState(null)
+    // Missing until the rules allow these collections; a trip still opens without them.
+    val games by remember(tripId) { repo.watchMahjongGames(tripId).retryBriefly().catch { emit(emptyList()) } }.collectAsState(null)
+    val hands by remember(tripId) { repo.watchMahjongHands(tripId).retryBriefly().catch { emit(emptyList()) } }.collectAsState(null)
     val t = trip
     if (t is Load.Gone) return Load.Gone
     if (t !is Load.Ready) return Load.Waiting
@@ -108,6 +122,8 @@ fun rememberTripData(tripId: String): Load<TripData> {
             flights ?: return Load.Waiting,
             lodgings ?: return Load.Waiting,
             checklist ?: return Load.Waiting,
+            games ?: return Load.Waiting,
+            hands ?: return Load.Waiting,
             repo.uid,
         ),
     )
@@ -143,9 +159,16 @@ fun TripScreen(tripId: String) {
             }
         }
         val quickAdd = TABS[tab] in setOf("總覽", "記帳", "結算")
+        var menu by remember { mutableStateOf(false) }
+        if (menu) {
+            InkDialog("記帳", { menu = false }, buttons = { TextAction("關閉", { menu = false }) }) {
+                MahjongMenuRows(data) { menu = false; nav.push(it) }
+            }
+        }
         Page(
             data.trip.name,
             onBack = { nav.pop() },
+            actions = { if (TABS[tab] == "記帳") RoundAction("⋯", { menu = true }) },
             bottom = { TabBar(tab) { tab = it } },
             fab = if (quickAdd) ({ AddButton({ nav.push(Screen.ExpenseForm(tripId, null)) }) }) else null,
         ) {

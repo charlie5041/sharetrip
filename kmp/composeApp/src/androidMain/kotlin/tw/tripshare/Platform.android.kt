@@ -115,6 +115,11 @@ actual fun loadFlag(key: String): Boolean = prefs.getBoolean(key, false)
 
 actual fun saveFlag(key: String, value: Boolean) = prefs.edit().putBoolean(key, value).apply()
 
+actual fun loadText(key: String): String? = prefs.getString(key, null)
+
+actual fun saveText(key: String, value: String?) =
+    if (value == null) prefs.edit().remove(key).apply() else prefs.edit().putString(key, value).apply()
+
 /** The visible activity, which Android's account picker needs. */
 var currentActivity: java.lang.ref.WeakReference<android.app.Activity>? = null
 

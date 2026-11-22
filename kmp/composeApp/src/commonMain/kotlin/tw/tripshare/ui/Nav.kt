@@ -20,6 +20,14 @@ sealed interface Screen {
     data class LodgingForm(val tripId: String, val lodgingId: String?) : Screen
     /** 從試算表匯入 into this trip. */
     data class Import(val tripId: String) : Screen
+    /** 麻將計點: the trip's games. */
+    data class MahjongList(val tripId: String) : Screen
+    /** Picks the players and the stake for a new game. */
+    data class MahjongNew(val tripId: String) : Screen
+    /** One game's scoreboard. */
+    data class Mahjong(val tripId: String, val gameId: String) : Screen
+    /** Records a hand of [gameId]; edits [handId] when set. */
+    data class MahjongHandForm(val tripId: String, val gameId: String, val handId: String?) : Screen
 }
 
 /**
@@ -42,6 +50,9 @@ class Navigator(start: Screen) {
     var onDrop: (Int) -> Unit = {}
 
     fun push(s: Screen) { stack.add(Entry(nextKey++, s)) }
+
+    /** Whether [s] is anywhere in the stack, not only on top. */
+    fun has(s: Screen): Boolean = stack.any { it.screen == s }
 
     /** Swaps the top screen, e.g. the new-trip form for the trip it made. */
     fun replace(s: Screen) {
