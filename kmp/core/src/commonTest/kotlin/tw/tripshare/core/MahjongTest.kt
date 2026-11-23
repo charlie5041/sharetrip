@@ -25,17 +25,35 @@ class MahjongTest {
         assertEquals(mapOf("a" to -90L, "b" to -90L, "d" to -90L, "c" to 270L), Mahjong.deltas(game, hand("c", null, 2)))
     }
 
-    @Test fun selfDrawnOnlyTheTablePays() {
+    @Test fun selfDrawnOnlyMarkedPayersPay() {
         val five = game.copy(players = listOf("a", "b", "c", "d", "e"))
-        val h = hand("c", null, 2).copy(table = listOf("a", "c", "d", "e"))
+        val h = hand("c", null, 2).copy(payers = listOf("a", "d", "e"))
         assertEquals(mapOf("a" to -90L, "d" to -90L, "e" to -90L, "c" to 270L), Mahjong.deltas(five, h))
-        val s = Mahjong.scores(five, listOf(h, hand("b", "a", 1).copy(table = listOf("a", "b", "c", "d"))))
+        val s = Mahjong.scores(five, listOf(h, hand("b", "a", 1)))
         assertEquals(mapOf("a" to -160L, "b" to 70L, "c" to 270L, "d" to -90L, "e" to -90L), s)
         assertEquals(0L, s.values.sum())
     }
 
-    @Test fun oldHandsWithoutATableSeatEveryone() {
-        assertEquals(listOf("a", "b", "c", "d"), hand("c", null, 2).seated(game))
+    @Test fun nonDealerSelfDrawnTheDealerPaysMore() {
+        // c 自摸 2 台; a deals on 連莊 1: a pays 2 + 1 + 2 = 5 台, the others 2.
+        val h = hand("c", null, 2).copy(payers = listOf("a", "b", "d"), dealerId = "a", streak = 1)
+        assertEquals(mapOf("a" to -150L, "b" to -90L, "d" to -90L, "c" to 330L), Mahjong.deltas(game, h))
+    }
+
+    @Test fun dealerSelfDrawnEveryonePaysTheExtra() {
+        val h = hand("a", null, 2).copy(payers = listOf("b", "c", "d"), dealerId = "a")
+        assertEquals(mapOf("b" to -110L, "c" to -110L, "d" to -110L, "a" to 330L), Mahjong.deltas(game, h))
+    }
+
+    @Test fun discardOnlyCountsTheDealerWhenInvolved() {
+        assertEquals(mapOf("b" to -130L, "a" to 130L), Mahjong.deltas(game, hand("a", "b", 3).copy(dealerId = "b")))
+        assertEquals(mapOf("b" to -110L, "a" to 110L), Mahjong.deltas(game, hand("a", "b", 3).copy(dealerId = "c")))
+    }
+
+    @Test fun oldHandsFallBackToTheTableThenEveryone() {
+        val five = game.copy(players = listOf("a", "b", "c", "d", "e"))
+        assertEquals(listOf("a", "d", "e"), hand("c", null, 2).copy(table = listOf("a", "c", "d", "e")).payersIn(five))
+        assertEquals(listOf("a", "b", "d"), hand("c", null, 2).payersIn(game))
     }
 
     @Test fun scoresAddUpAndSumToZero() {
@@ -74,7 +92,7 @@ class MahjongTest {
 
     @Test fun roundTripsThroughMaps() {
         assertEquals(game, MahjongGame.fromMap("g", game.toMap()))
-        val h = hand("c", null, 2).copy(table = listOf("a", "b", "c", "d"))
+        val h = hand("c", null, 2).copy(payers = listOf("a", "b", "d"), dealerId = "a", streak = 2)
         val back = MahjongHand.fromMap(h.id, h.toMap())
         assertEquals(h, back)
         assertNull(back.loserId)
