@@ -28,7 +28,7 @@ data class MahjongGame(
         "createdBy" to createdBy,
     )
 
-    /** What one 胡 with [tai] 台 costs each person who pays. */
+    /** What one 胡 with [tai] 台 costs one person who pays. */
     fun price(tai: Int): Long = add(baseMinor, mul(perTaiMinor, tai.toLong()))
 
     companion object {
@@ -44,7 +44,11 @@ data class MahjongGame(
     }
 }
 
-/** One hand (一筆): [winnerId] 胡, off [loserId]'s discard, or 自摸 when that is null. */
+/**
+ * One hand (一筆): [winnerId] 胡, off [loserId]'s discard, or 自摸 when that
+ * is null, paid by [payers]. [tai] leaves out the dealer's: whoever pays the
+ * dealer, or is paid by them, adds 1 + 2 × [streak] 台 on top.
+ */
 data class MahjongHand(
     val id: String,
     val gameId: String,
@@ -53,16 +57,24 @@ data class MahjongHand(
     val tai: Int,
     val at: Long,
     val createdBy: String,
-    /**
-     * Who sat at the table for this hand, the winner included. Empty for
-     * hands from before people could take turns: everyone in the game sat.
-     */
+    /** Who paid a 自摸. Empty for hands from before it was asked. */
+    val payers: List<String> = emptyList(),
+    /** 莊家, or null when nobody marked one (hands from 0.6.x count 台 with the dealer's already in). */
+    val dealerId: String? = null,
+    /** 連莊: how many hands in a row the dealer has kept the deal. */
+    val streak: Int = 0,
+    /** 0.6.1 only: who sat at the table; read for old 自摸, never written. */
     val table: List<String> = emptyList(),
 ) {
     val selfDrawn: Boolean get() = loserId == null
 
-    /** Who sat at the table, falling back to the whole game for old hands. */
-    fun seated(game: MahjongGame): List<String> = table.ifEmpty { game.players }
+    /** Who pays: the discarder, or for 自摸 the marked payers (old hands: everyone else seated). */
+    fun payersIn(game: MahjongGame): List<String> = loserId?.let { listOf(it) }
+        ?: payers.ifEmpty { table.ifEmpty { game.players }.filter { it != winnerId } }
+
+    /** 台 between the winner and [payer]: the dealer's extra when either of them deals. */
+    fun taiFor(payer: String): Int =
+        tai + if (dealerId != null && (dealerId == winnerId || dealerId == payer)) 1 + 2 * streak else 0
 
     fun toMap(): Doc = mapOf(
         "gameId" to gameId,
@@ -71,7 +83,9 @@ data class MahjongHand(
         "tai" to tai.toLong(),
         "at" to at,
         "createdBy" to createdBy,
-        "table" to table,
+        "payers" to payers,
+        "dealerId" to dealerId,
+        "streak" to streak.toLong(),
     )
 
     companion object {
@@ -83,6 +97,9 @@ data class MahjongHand(
             tai = m.long("tai").toInt(),
             at = m.long("at"),
             createdBy = m.str("createdBy"),
+            payers = m.strings("payers"),
+            dealerId = m.strOrNull("dealerId"),
+            streak = m.longOr("streak", 0).toInt(),
             table = m.strings("table"),
         )
     }
@@ -91,15 +108,18 @@ data class MahjongHand(
 object Mahjong {
     /**
      * What [hand] moves, per player: the winner gains, payers lose.
-     * 放槍: the one who discarded pays the price. 自摸: every other player
-     * at the table pays it; whoever sat out this hand pays nothing.
+     * 放槍: the one who discarded pays. 自摸: each marked payer pays. Each
+     * pays 底 + 台 × 每台, with the dealer's 台 where the dealer is involved.
      */
     fun deltas(game: MahjongGame, hand: MahjongHand): Map<String, Long> {
-        val price = game.price(hand.tai)
-        val payers = hand.loserId?.let { listOf(it) } ?: hand.seated(game).filter { it != hand.winnerId }
         val out = LinkedHashMap<String, Long>()
-        payers.forEach { out[it] = -price }
-        out[hand.winnerId] = mul(price, payers.size.toLong())
+        var won = 0L
+        hand.payersIn(game).filter { it != hand.winnerId }.forEach { p ->
+            val price = game.price(hand.taiFor(p))
+            out[p] = -price
+            won = add(won, price)
+        }
+        out[hand.winnerId] = won
         return out
     }
 

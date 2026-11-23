@@ -207,7 +207,7 @@ fun MahjongNewScreen(tripId: String) {
             },
         ) {
             SectionTitle("誰要打？")
-            Txt("人數不限，超過 4 位可以輪流上桌，每一筆再選那局誰在桌上。", size = 14, color = AppColors.faint)
+            Txt("人數不限，超過 4 位可以輪流上桌，自摸時再點誰付錢。", size = 14, color = AppColors.faint)
             if (data.members.size < 3) Txt("旅程成員不到 3 位，先到「成員」加人。", size = 14, color = AppColors.faint)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 data.members.forEach { m ->
@@ -219,7 +219,7 @@ fun MahjongNewScreen(tripId: String) {
                 InkField(base, { base = it }, "底", Modifier.weight(1f), keyboard = KeyboardType.Decimal, maxLength = 10)
                 InkField(perTai, { perTai = it }, "每台", Modifier.weight(1f), keyboard = KeyboardType.Decimal, maxLength = 10)
             }
-            Txt("放槍：放槍的人付「底 + 台數 × 每台」。自摸：其他人各付一份。台數由你們自己算好再填，莊和連莊也算在裡面。", size = 14, color = AppColors.faint)
+            Txt("放槍：放槍的人付「底 + 台數 × 每台」。自摸：點選的付錢的人各付一份。莊家有付或有收的那份，自動加「1 + 2 × 連莊」台。", size = 14, color = AppColors.faint)
         }
     }
 }
@@ -289,8 +289,8 @@ fun MahjongScreen(tripId: String, gameId: String) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Txt("${i + 1}", size = 13, color = AppColors.faint)
                             Txt(handText(data, h), Modifier.weight(1f))
-                            val price = game.price(h.tai)
-                            Txt(if (h.selfDrawn) "各 ${plain(cur, price)}" else plain(cur, price), bold = true)
+                            val won = Mahjong.deltas(game, h)[h.winnerId] ?: 0
+                            Txt(plain(cur, won), bold = true)
                         }
                     }
                 }
@@ -337,10 +337,10 @@ fun MahjongScreen(tripId: String, gameId: String) {
                     data.members.filter { it.id !in game.players }.forEach { m ->
                         Chip(m.name, false, {
                             adding = false
-                            // Hands recorded before anyone could sit out keep their four, not the new list.
-                            val untabled = hands.filter { it.table.isEmpty() }
+                            // Older 自摸 without marked payers keep who paid then, not the new list.
+                            val unmarked = hands.filter { it.selfDrawn && it.payers.isEmpty() }
                             write("沒有加成功") {
-                                untabled.forEach { session.repo.saveMahjongHand(tripId, it.copy(table = game.players)) }
+                                unmarked.forEach { session.repo.saveMahjongHand(tripId, it.copy(payers = it.payersIn(game))) }
                                 session.repo.saveMahjongGame(tripId, game.copy(players = game.players + m.id))
                             }
                         })
@@ -371,8 +371,8 @@ fun MahjongScreen(tripId: String, gameId: String) {
 }
 
 private fun handText(data: TripData, h: MahjongHand): String =
-    if (h.selfDrawn) "${data.nameOf(h.winnerId)} 自摸 · ${h.tai} 台"
-    else "${data.nameOf(h.winnerId)} 胡，${data.nameOf(h.loserId!!)} 放槍 · ${h.tai} 台"
+    (if (h.selfDrawn) "${data.nameOf(h.winnerId)} 自摸 · ${h.tai} 台" else "${data.nameOf(h.winnerId)} 胡，${data.nameOf(h.loserId!!)} 放槍 · ${h.tai} 台") +
+        (h.dealerId?.let { " · 莊 ${data.nameOf(it)}" + if (h.streak > 0) " 連 ${h.streak}" else "" } ?: "")
 
 /** Two big totals per row; the scrapbook look sticks a yellow note on whoever leads. */
 @Composable
@@ -475,48 +475,62 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
             return@WithTrip
         }
         val cur = currencyOf(game)
-        // Who sits this hand: as recorded, else as in the last hand, else the first four.
-        val rotating = game.players.size > 4
-        var table by remember {
-            mutableStateOf(
-                (existing?.seated(game) ?: data.handsOf(game).lastOrNull()?.seated(game) ?: game.players.take(4))
-                    .filter { it in game.players },
-            )
-        }
+        val earlier = data.handsOf(game).filter { it.id != handId }
+        val last = earlier.lastOrNull()
+        // Who was at the table last time someone 自摸: those paying, and the one who won.
+        val lastTable: Set<String> = earlier.lastOrNull { it.selfDrawn }
+            ?.let { (it.payersIn(game) + it.winnerId).toSet() }
+            ?: if (game.players.size <= 4) game.players.toSet() else emptySet()
         var winner by remember { mutableStateOf(existing?.winnerId) }
         var how by remember { mutableStateOf(if (existing?.selfDrawn == true) Win.self else Win.discard) }
         var loser by remember { mutableStateOf(existing?.loserId) }
+        // Null until someone taps a payer: then it follows the winner from lastTable.
+        var payerPick by remember { mutableStateOf(existing?.takeIf { it.selfDrawn }?.payersIn(game)?.toSet()) }
         var tai by remember { mutableIntStateOf(existing?.tai ?: 0) }
+        // 莊 carries over: kept with one more 連莊 when the dealer won the last hand, otherwise picked anew.
+        var dealer by remember {
+            mutableStateOf(existing?.dealerId ?: last?.dealerId?.takeIf { last.winnerId == it })
+        }
+        var streak by remember {
+            mutableIntStateOf(existing?.streak ?: last?.takeIf { it.dealerId != null && it.winnerId == it.dealerId }?.let { it.streak + 1 } ?: 0)
+        }
         var deleting by remember { mutableStateOf(false) }
-        val price = game.price(tai)
-        val others = table.filter { it != winner }
-        val ready = table.size in 3..4 && winner in table &&
-            (how == Win.self || (loser != null && loser != winner && loser in table))
+        val w = winner
+        val payers: List<String> = when {
+            w == null -> emptyList()
+            how == Win.discard -> listOfNotNull(loser).filter { it != w }
+            else -> game.players.filter { it != w && it in (payerPick ?: lastTable) }
+        }
+        val draft = w?.let {
+            MahjongHand(
+                id = existing?.id ?: "", gameId = gameId, winnerId = it,
+                loserId = if (how == Win.self) null else loser, tai = tai,
+                at = existing?.at ?: nowMillis(), createdBy = existing?.createdBy ?: "",
+                payers = if (how == Win.self) payers else emptyList(),
+                dealerId = dealer, streak = if (dealer == null) 0 else streak,
+            )
+        }
+        val ready = draft != null && payers.isNotEmpty()
 
-        fun toggleSeat(id: String) {
-            if (id in table) {
-                table = table - id
-                if (winner == id) winner = null
-                if (loser == id) loser = null
-            } else if (table.size >= 4) {
-                toasts.show("一桌最多 4 位，先取消一位")
-            } else {
-                table = game.players.filter { it in table || it == id }
-            }
+        fun togglePayer(id: String) {
+            val now = payers.toSet()
+            payerPick = if (id in now) now - id else now + id
         }
 
         fun save() {
+            val h = draft ?: return
             if (!ready) return
-            val h = MahjongHand(
-                id = existing?.id ?: "", gameId = gameId, winnerId = winner!!,
-                loserId = if (how == Win.self) null else loser, tai = tai,
-                at = existing?.at ?: nowMillis(), createdBy = existing?.createdBy ?: "",
-                table = table,
-            )
             session.background.launch {
                 runCatching { session.repo.saveMahjongHand(tripId, h) }.onFailure { toasts.show("沒有存成功：${it.message}") }
             }
             nav.pop()
+        }
+
+        @Composable
+        fun Chips(ids: List<String>, on: (String) -> Boolean, color: androidx.compose.ui.graphics.Color = AppColors.coral, onTap: (String) -> Unit) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ids.forEach { id -> Chip(data.nameOf(id), on(id), { onTap(id) }, color = color) }
+            }
         }
 
         Page(
@@ -529,56 +543,55 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
                 }
             },
         ) {
-            if (rotating) {
-                SectionTitle("這局誰在桌上？（${table.size}/4）")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    game.players.forEach { id -> Chip(data.nameOf(id), id in table, { toggleSeat(id) }, color = AppColors.wakatake) }
-                }
-            }
             SectionTitle("誰胡？")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                table.forEach { id ->
-                    Chip(data.nameOf(id), winner == id, {
-                        winner = id
-                        if (loser == id) loser = null
-                    })
-                }
+            Chips(game.players, { it == winner }) { id ->
+                winner = id
+                if (loser == id) loser = null
             }
             SectionTitle("怎麼胡？")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Win.entries.forEach { w -> Chip(w.label, how == w, { how = w }) }
+                Win.entries.forEach { x -> Chip(x.label, how == x, { how = x }) }
             }
-            if (how == Win.discard) {
-                SectionTitle("誰放槍？")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    others.forEach { id -> Chip(data.nameOf(id), loser == id, { loser = id }) }
+            if (w != null) {
+                if (how == Win.discard) {
+                    SectionTitle("誰放槍？")
+                    Chips(game.players.filter { it != w }, { it == loser }) { loser = it }
+                } else {
+                    SectionTitle("誰付錢？（${payers.size} 位）")
+                    Chips(game.players.filter { it != w }, { it in payers }, AppColors.wakatake) { togglePayer(it) }
                 }
             }
-            SectionTitle("幾台？（自己算好，含莊、連莊）")
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StepButton("−") { if (tai > 0) tai-- }
-                Txt("$tai", Modifier.width(72.dp), size = 40, bold = true, align = TextAlign.Center)
-                StepButton("＋") { if (tai < 99) tai++ }
+            SectionTitle("幾台？（不含莊家台）")
+            Stepper(tai, 0, 99, big = true) { tai = it }
+            SectionTitle("誰是莊家？")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                game.players.forEach { id ->
+                    Chip(data.nameOf(id), dealer == id, { dealer = if (dealer == id) null else id }, color = AppColors.yamabuki)
+                }
+            }
+            if (dealer != null) {
+                SectionTitle("連莊幾次？（莊家那份加 ${1 + 2 * streak} 台）")
+                Stepper(streak, 0, 20, big = false) { streak = it }
+            } else {
+                Txt("沒選莊家就不加莊家台。", size = 13, color = AppColors.faint)
             }
             InkCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Txt("這一筆", size = 13, color = AppColors.faint)
-                    val w = winner
-                    Txt(
-                        when {
-                            table.size < 3 -> "桌上至少要 3 位"
-                            w == null -> "先選誰胡"
-                            how == Win.self -> "其他 ${table.size - 1} 家各付 ${data.nameOf(w)} ${plain(cur, price)}"
-                            loser == null -> "選誰放槍"
-                            else -> "${data.nameOf(loser!!)} 付 ${data.nameOf(w)} ${plain(cur, price)}"
-                        },
-                        size = 20, bold = true, align = TextAlign.Center,
-                    )
-                    Txt("${plain(cur, game.baseMinor)} + $tai 台 × ${plain(cur, game.perTaiMinor)}", size = 13, color = AppColors.faint)
+                    when {
+                        draft == null -> Txt("先選誰胡", size = 20, bold = true)
+                        payers.isEmpty() -> Txt(if (how == Win.discard) "選誰放槍" else "選誰付錢", size = 20, bold = true)
+                        else -> {
+                            val d = draft!!
+                            payers.forEach { p ->
+                                val t = d.taiFor(p)
+                                Txt("${data.nameOf(p)} 付 ${plain(cur, game.price(t))}（$t 台）", size = 17, bold = true)
+                            }
+                            val total = Mahjong.deltas(game, d)[d.winnerId] ?: 0
+                            Txt("${data.nameOf(d.winnerId)} 共收 ${plain(cur, total)}", size = 20, bold = true, color = AppColors.good)
+                        }
+                    }
+                    Txt("每份 = ${plain(cur, game.baseMinor)} + 台數 × ${plain(cur, game.perTaiMinor)}", size = 13, color = AppColors.faint)
                 }
             }
         }
@@ -590,6 +603,19 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
                 nav.pop()
             }, onDismiss = { deleting = false })
         }
+    }
+}
+
+@Composable
+private fun Stepper(value: Int, min: Int, max: Int, big: Boolean, onChange: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StepButton("−") { if (value > min) onChange(value - 1) }
+        Txt("$value", Modifier.width(72.dp), size = if (big) 40 else 28, bold = true, align = TextAlign.Center)
+        StepButton("＋") { if (value < max) onChange(value + 1) }
     }
 }
 
