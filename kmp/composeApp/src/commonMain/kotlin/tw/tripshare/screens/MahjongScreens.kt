@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -110,7 +111,23 @@ private fun currencyOf(g: MahjongGame): Currency = runCatching { Currency.of(g.c
 @Composable
 fun MahjongListScreen(tripId: String) {
     val nav = LocalNav.current
+    val session = LocalSession.current
+    val toasts = LocalToasts.current
     WithTrip(tripId) { data ->
+        var deleting by remember { mutableStateOf<MahjongGame?>(null) }
+        deleting?.let { g ->
+            ConfirmDialog(
+                "刪除這一場？",
+                if (data.isSettled(g)) "每一筆和記帳裡這場的麻將紀錄都會刪掉，結算回到打之前的樣子。" else "每一筆都會一起刪掉，不會影響結算。",
+                "刪除",
+                onConfirm = {
+                    session.background.launch {
+                        runCatching { session.repo.deleteMahjong(tripId, g.id) }.onFailure { toasts.show("沒有刪除成功：${it.message}") }
+                    }
+                },
+                onDismiss = { deleting = null },
+            )
+        }
         Page(
             "麻將計點",
             onBack = { nav.pop() },
@@ -127,7 +144,7 @@ fun MahjongListScreen(tripId: String) {
                 val cur = currencyOf(g)
                 val hands = data.handsOf(g)
                 val scores = Mahjong.scores(g, hands)
-                InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Mahjong(tripId, g.id)) }) {
+                key(g.id) { SwipeToDelete(onDelete = { deleting = g }) { InkCard(Modifier.fillMaxWidth(), onClick = { nav.push(Screen.Mahjong(tripId, g.id)) }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Txt(deco("🀄") + gameDate(g), Modifier.weight(1f), bold = true)
                         Txt(
@@ -139,7 +156,7 @@ fun MahjongListScreen(tripId: String) {
                         scores.entries.joinToString("　") { (id, v) -> "${data.nameOf(id)} ${signed(cur, v)}" },
                         size = 14, color = AppColors.faint,
                     )
-                }
+                } } }
             }
         }
     }
@@ -163,8 +180,7 @@ fun MahjongNewScreen(tripId: String) {
         val perTaiMinor = cur.parse(perTai)
         val players = data.members.filter { it.id in picked }
         val problem = when {
-            players.size < 3 -> "選 3 到 4 位上桌的人"
-            players.size > 4 -> "一桌最多 4 位"
+            players.size < 3 -> "至少選 3 位"
             baseMinor == null || baseMinor == 0L -> "請填底"
             perTaiMinor == null -> "請填每台多少"
             else -> null
@@ -190,7 +206,8 @@ fun MahjongNewScreen(tripId: String) {
                 }
             },
         ) {
-            SectionTitle("誰上桌？")
+            SectionTitle("誰要打？")
+            Txt("人數不限，超過 4 位可以輪流上桌，每一筆再選那局誰在桌上。", size = 14, color = AppColors.faint)
             if (data.members.size < 3) Txt("旅程成員不到 3 位，先到「成員」加人。", size = 14, color = AppColors.faint)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 data.members.forEach { m ->
@@ -235,6 +252,7 @@ fun MahjongScreen(tripId: String, gameId: String) {
         var finishing by remember { mutableStateOf(false) }
         var deletingGame by remember { mutableStateOf(false) }
         var unsettling by remember { mutableStateOf(false) }
+        var adding by remember { mutableStateOf(false) }
         var deletingHand by remember { mutableStateOf<MahjongHand?>(null) }
 
         fun write(failure: String, block: suspend () -> Unit) {
@@ -276,7 +294,7 @@ fun MahjongScreen(tripId: String, gameId: String) {
                         }
                     }
                 }
-                if (settled) row() else SwipeToDelete(onDelete = { deletingHand = h }) { row() }
+                key(h.id) { if (settled) row() else SwipeToDelete(onDelete = { deletingHand = h }) { row() } }
             }
             if (!settled && hands.isNotEmpty()) {
                 InkButton("結束這場，寫進結算", { finishing = true }, Modifier.fillMaxWidth(), fill = AppColors.card)
@@ -285,10 +303,13 @@ fun MahjongScreen(tripId: String, gameId: String) {
 
         if (menu) {
             InkDialog("這一場", { menu = false }, buttons = { TextAction("關閉", { menu = false }) }) {
+                if (!settled && data.members.any { it.id !in game.players }) {
+                    ActionRowLite("加人", "有人中途加入輪流上桌") { menu = false; adding = true }
+                }
                 ActionRowLite("所有場次", "之前打過的也在這裡") { menu = false; nav.push(Screen.MahjongList(tripId)) }
-                ActionRowLite("刪除這場", if (settled) "要先撤回結算" else "連同每一筆一起刪掉") {
+                ActionRowLite("刪除這場", if (settled) "連同每一筆和記帳裡的麻將紀錄一起刪掉" else "連同每一筆一起刪掉") {
                     menu = false
-                    if (settled) toasts.show("這場已經寫進結算，要先撤回才能刪") else deletingGame = true
+                    deletingGame = true
                 }
             }
         }
@@ -298,10 +319,34 @@ fun MahjongScreen(tripId: String, gameId: String) {
             }, onDismiss = { deletingHand = null })
         }
         if (deletingGame) {
-            ConfirmDialog("刪除這一場？", "每一筆都會一起刪掉，不會影響結算。", "刪除", onConfirm = {
-                write("沒有刪除成功") { session.repo.deleteMahjong(tripId, gameId) }
-                nav.pop()
-            }, onDismiss = { deletingGame = false })
+            ConfirmDialog(
+                "刪除這一場？",
+                if (settled) "每一筆和記帳裡這場的麻將紀錄都會刪掉，結算回到打之前的樣子。" else "每一筆都會一起刪掉，不會影響結算。",
+                "刪除",
+                onConfirm = {
+                    write("沒有刪除成功") { session.repo.deleteMahjong(tripId, gameId) }
+                    nav.pop()
+                },
+                onDismiss = { deletingGame = false },
+            )
+        }
+        if (adding) {
+            InkDialog("加人", { adding = false }, buttons = { TextAction("關閉", { adding = false }) }) {
+                Txt("點一位加進這一場，從 0 開始算。", size = 14, color = AppColors.faint)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    data.members.filter { it.id !in game.players }.forEach { m ->
+                        Chip(m.name, false, {
+                            adding = false
+                            // Hands recorded before anyone could sit out keep their four, not the new list.
+                            val untabled = hands.filter { it.table.isEmpty() }
+                            write("沒有加成功") {
+                                untabled.forEach { session.repo.saveMahjongHand(tripId, it.copy(table = game.players)) }
+                                session.repo.saveMahjongGame(tripId, game.copy(players = game.players + m.id))
+                            }
+                        })
+                    }
+                }
+            }
         }
         if (unsettling) {
             ConfirmDialog("撤回結算？", "記帳裡這場的麻將紀錄會刪掉，結算回到打之前的樣子，可以繼續記。", "撤回", onConfirm = {
@@ -430,14 +475,35 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
             return@WithTrip
         }
         val cur = currencyOf(game)
+        // Who sits this hand: as recorded, else as in the last hand, else the first four.
+        val rotating = game.players.size > 4
+        var table by remember {
+            mutableStateOf(
+                (existing?.seated(game) ?: data.handsOf(game).lastOrNull()?.seated(game) ?: game.players.take(4))
+                    .filter { it in game.players },
+            )
+        }
         var winner by remember { mutableStateOf(existing?.winnerId) }
         var how by remember { mutableStateOf(if (existing?.selfDrawn == true) Win.self else Win.discard) }
         var loser by remember { mutableStateOf(existing?.loserId) }
         var tai by remember { mutableIntStateOf(existing?.tai ?: 0) }
         var deleting by remember { mutableStateOf(false) }
         val price = game.price(tai)
-        val others = game.players.filter { it != winner }
-        val ready = winner != null && (how == Win.self || (loser != null && loser != winner))
+        val others = table.filter { it != winner }
+        val ready = table.size in 3..4 && winner in table &&
+            (how == Win.self || (loser != null && loser != winner && loser in table))
+
+        fun toggleSeat(id: String) {
+            if (id in table) {
+                table = table - id
+                if (winner == id) winner = null
+                if (loser == id) loser = null
+            } else if (table.size >= 4) {
+                toasts.show("一桌最多 4 位，先取消一位")
+            } else {
+                table = game.players.filter { it in table || it == id }
+            }
+        }
 
         fun save() {
             if (!ready) return
@@ -445,6 +511,7 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
                 id = existing?.id ?: "", gameId = gameId, winnerId = winner!!,
                 loserId = if (how == Win.self) null else loser, tai = tai,
                 at = existing?.at ?: nowMillis(), createdBy = existing?.createdBy ?: "",
+                table = table,
             )
             session.background.launch {
                 runCatching { session.repo.saveMahjongHand(tripId, h) }.onFailure { toasts.show("沒有存成功：${it.message}") }
@@ -462,9 +529,15 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
                 }
             },
         ) {
+            if (rotating) {
+                SectionTitle("這局誰在桌上？（${table.size}/4）")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    game.players.forEach { id -> Chip(data.nameOf(id), id in table, { toggleSeat(id) }, color = AppColors.wakatake) }
+                }
+            }
             SectionTitle("誰胡？")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                game.players.forEach { id ->
+                table.forEach { id ->
                     Chip(data.nameOf(id), winner == id, {
                         winner = id
                         if (loser == id) loser = null
@@ -497,8 +570,9 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
                     val w = winner
                     Txt(
                         when {
+                            table.size < 3 -> "桌上至少要 3 位"
                             w == null -> "先選誰胡"
-                            how == Win.self -> "其他 ${game.players.size - 1} 家各付 ${data.nameOf(w)} ${plain(cur, price)}"
+                            how == Win.self -> "其他 ${table.size - 1} 家各付 ${data.nameOf(w)} ${plain(cur, price)}"
                             loser == null -> "選誰放槍"
                             else -> "${data.nameOf(loser!!)} 付 ${data.nameOf(w)} ${plain(cur, price)}"
                         },
