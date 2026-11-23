@@ -478,9 +478,11 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
         val earlier = data.handsOf(game).filter { it.id != handId }
         val last = earlier.lastOrNull()
         // Who was at the table last time someone 自摸: those paying, and the one who won.
-        val lastTable: Set<String> = earlier.lastOrNull { it.selfDrawn }
-            ?.let { (it.payersIn(game) + it.winnerId).toSet() }
-            ?: if (game.players.size <= 4) game.players.toSet() else emptySet()
+        // A table seats four, so a 自摸 has at most three payers; anything bigger isn't a table to reuse.
+        val lastTable: Set<String> = (
+            earlier.lastOrNull { it.selfDrawn }?.let { (it.payersIn(game) + it.winnerId).toSet() }
+                ?: game.players.toSet()
+            ).takeIf { it.size <= 4 } ?: emptySet()
         var winner by remember { mutableStateOf(existing?.winnerId) }
         var how by remember { mutableStateOf(if (existing?.selfDrawn == true) Win.self else Win.discard) }
         var loser by remember { mutableStateOf(existing?.loserId) }
@@ -499,7 +501,8 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
         val payers: List<String> = when {
             w == null -> emptyList()
             how == Win.discard -> listOfNotNull(loser).filter { it != w }
-            else -> game.players.filter { it != w && it in (payerPick ?: lastTable) }
+            // The last table only fits when the winner sat at it; otherwise it could name four payers.
+            else -> game.players.filter { it != w && it in (payerPick ?: lastTable.takeIf { w in it } ?: emptySet()) }
         }
         val draft = w?.let {
             MahjongHand(
@@ -514,7 +517,11 @@ fun MahjongHandScreen(tripId: String, gameId: String, handId: String?) {
 
         fun togglePayer(id: String) {
             val now = payers.toSet()
-            payerPick = if (id in now) now - id else now + id
+            payerPick = when {
+                id in now -> now - id
+                now.size >= 3 -> { toasts.show("自摸最多三家付錢，先取消一位"); now }
+                else -> now + id
+            }
         }
 
         fun save() {
